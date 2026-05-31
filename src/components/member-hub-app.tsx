@@ -32,7 +32,6 @@ import {
   Send,
   Settings,
   ShieldCheck,
-  Star,
   Ticket,
   Trophy,
   UserPlus,
@@ -67,11 +66,11 @@ type ProfileState = {
 };
 
 const tabs: { id: Tab; label: string; icon: typeof Home }[] = [
-  { id: "home", label: "Home", icon: Home },
+  { id: "home", label: "Today", icon: Home },
   { id: "pass", label: "Pass", icon: IdCard },
-  { id: "workshops", label: "Workshops", icon: CalendarCheck },
-  { id: "network", label: "Network", icon: Network },
-  { id: "profile", label: "Profile", icon: CircleUserRound },
+  { id: "workshops", label: "Classes", icon: CalendarCheck },
+  { id: "network", label: "People", icon: Network },
+  { id: "profile", label: "Me", icon: CircleUserRound },
 ];
 
 const roleLabels: Record<UserRole, string> = {
@@ -505,43 +504,92 @@ function HomeTab({
 
   return (
     <div className="space-y-4">
-      <GreetingCard member={member} />
+      <TodayHero member={member} delegate={delegate} setActiveTab={setActiveTab} />
       <TodayMission member={member} delegate={delegate} setActiveTab={setActiveTab} />
-      <HeroCard
-        title={delegate ? "Your Convention Journey Starts Here" : "Unlock Your BICC Delegate Access"}
-        body={delegate ? "Pass, workshops, certificates, and updates in one playful pocket hub." : "Open the full hub with QR pass, workshops, certificates, and network access."}
-        button={delegate ? "View Pass" : "Become BICC Delegate"}
-        onClick={() => setActiveTab(delegate ? "pass" : "home")}
-      />
+      {delegate ? <NextWorkshopCard setActiveTab={setActiveTab} /> : <UnlockDelegatePanel />}
       <PhotoWall member={member} posts={photoPosts} onAddPhoto={onAddPhoto} compact />
-
-      {delegate ? (
-        <>
-          <div className="grid grid-cols-2 gap-3">
-            <QuickCard icon={IdCard} title="View Pass" body="Active" onClick={() => setActiveTab("pass")} />
-            <QuickCard icon={CalendarCheck} title="My Workshops" body="3 joined" onClick={() => setActiveTab("workshops")} />
-            <QuickCard icon={Award} title="Certificates" body="1 ready" onClick={() => setActiveTab("profile")} />
-            <QuickCard icon={Megaphone} title="Announcements" body="2 new" />
-          </div>
-          <StatusGrid />
-        </>
-      ) : (
-        <>
-          <div className="grid grid-cols-2 gap-3">
-            <QuickCard icon={Ticket} title="Workshop Preview" body="Browse" onClick={() => setActiveTab("workshops")} />
-            <QuickCard icon={Star} title="Featured Mentors" body="Meet them" onClick={() => setActiveTab("network")} />
-            <QuickCard icon={Megaphone} title="Public Announcements" body={`${announcements.length} notes`} />
-            <QuickCard icon={CircleUserRound} title="Update Profile" body="Edit" onClick={() => setActiveTab("profile")} />
-          </div>
-          <div className="space-y-3">
-            <LockedCard feature="Digital Pass" value="Unlock QR check-in and delegate identity." />
-            <LockedCard feature="Certificates" value="Collect attendance-backed BICC certificates." />
-            <LockedCard feature="Full Network" value="Connect with delegates, mentors, and performers." />
-            <LockedCard feature="Performance Submission" value="Submit your act for convention opportunities." />
-          </div>
-        </>
-      )}
+      <CompactActions delegate={delegate} setActiveTab={setActiveTab} />
       <AnnouncementStrip delegate={delegate} />
+    </div>
+  );
+}
+
+function TodayHero({ member, delegate, setActiveTab }: { member: Member; delegate: boolean; setActiveTab: (tab: Tab) => void }) {
+  return (
+    <section className="relative overflow-hidden rounded-[34px] border-[3px] border-[#0B2A5B] bg-gradient-to-br from-white via-[#FFF8E8] to-[#7DD3FC] p-5 shadow-game">
+      <div className="absolute -right-12 -top-12 h-32 w-32 rounded-full bg-[#FFE26A]/70" />
+      <div className="relative flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="badge-dark w-fit">Today</p>
+          <h2 className="mt-4 text-3xl font-black leading-none text-[#0B2A5B]">Hi, {member.name}</h2>
+          <p className="mt-2 text-sm font-bold leading-5 text-[#0B2A5B]/65">
+            {delegate ? "Your convention pocket companion is ready." : "Explore the hub and unlock delegate tools."}
+          </p>
+        </div>
+        <LogoMark />
+      </div>
+      <button className="primary-button mt-5" onClick={() => setActiveTab(delegate ? "pass" : "profile")}>
+        {delegate ? <QrCode className="h-5 w-5" /> : <UserPlus className="h-5 w-5" />}
+        {delegate ? "Show My Pass" : "Complete Free Profile"}
+      </button>
+    </section>
+  );
+}
+
+function NextWorkshopCard({ setActiveTab }: { setActiveTab: (tab: Tab) => void }) {
+  const nextWorkshop = workshops[0];
+
+  return (
+    <section className="game-card p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="badge-yellow w-fit">Next class</p>
+          <h3 className="mt-3 text-2xl font-black leading-tight text-[#0B2A5B]">{nextWorkshop.title}</h3>
+          <p className="mt-2 text-sm font-bold text-[#0B2A5B]/65">{nextWorkshop.time} · {nextWorkshop.room}</p>
+        </div>
+        <CalendarCheck className="h-8 w-8 text-[#FF5A4F]" strokeWidth={3} />
+      </div>
+      <button className="secondary-button mt-4 w-full" onClick={() => setActiveTab("workshops")}>View My Classes</button>
+    </section>
+  );
+}
+
+function UnlockDelegatePanel() {
+  return (
+    <section className="game-card bg-gradient-to-br from-[#FFE26A] to-white p-4">
+      <p className="badge-dark w-fit">Delegate access</p>
+      <h3 className="mt-3 text-2xl font-black leading-tight text-[#0B2A5B]">Unlock the full BICC pocket pass.</h3>
+      <p className="mt-2 text-sm font-bold leading-5 text-[#0B2A5B]/65">QR pass, class booking, performer directory, certificates and photo memories.</p>
+      <button className="primary-button mt-4">Become BICC Delegate</button>
+    </section>
+  );
+}
+
+function CompactActions({ delegate, setActiveTab }: { delegate: boolean; setActiveTab: (tab: Tab) => void }) {
+  const actions = delegate
+    ? [
+        { icon: CalendarCheck, title: "Classes", body: "3 joined", tab: "workshops" as Tab },
+        { icon: Users, title: "People", body: "Directory", tab: "network" as Tab },
+        { icon: Award, title: "Certificates", body: "2 items", tab: "profile" as Tab },
+      ]
+    : [
+        { icon: Ticket, title: "Classes", body: "Preview", tab: "workshops" as Tab },
+        { icon: Users, title: "People", body: "Limited", tab: "network" as Tab },
+        { icon: CircleUserRound, title: "Profile", body: "Edit", tab: "profile" as Tab },
+      ];
+
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      {actions.map((action) => {
+        const Icon = action.icon;
+        return (
+          <button className="rounded-[24px] border-[2px] border-[#0B2A5B] bg-white p-3 text-left shadow-[0_3px_0_#0B2A5B]" key={action.title} onClick={() => setActiveTab(action.tab)}>
+            <Icon className="h-5 w-5 text-[#FF5A4F]" strokeWidth={3} />
+            <h3 className="mt-3 text-sm font-black text-[#0B2A5B]">{action.title}</h3>
+            <p className="text-xs font-bold text-[#0B2A5B]/55">{action.body}</p>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -615,29 +663,33 @@ function PhotoWall({
     <section className="game-card overflow-hidden p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <SectionHeader label="Photo Wall" title="合照签名铺" compact />
-          <p className="mt-2 text-sm font-bold leading-5 text-[#0B2A5B]/65">拍合照、写一句签名，大家都可以在这里浏览。</p>
+          <SectionHeader label={compact ? "Smile wall" : "Photo Booth"} title="合照签名铺" compact />
+          <p className="mt-2 text-sm font-bold leading-5 text-[#0B2A5B]/65">
+            {compact ? "今日合照预览。" : "拍合照、写一句签名，大家都可以在这里浏览。"}
+          </p>
         </div>
         <div className="grid h-12 w-12 shrink-0 place-items-center rounded-[20px] border-[3px] border-[#0B2A5B] bg-[#FFE26A]">
           <Camera className="h-6 w-6 text-[#0B2A5B]" strokeWidth={3} />
         </div>
       </div>
 
-      <div className="mt-4 rounded-[24px] border-[3px] border-[#0B2A5B] bg-[#FFF8E8] p-3">
-        <input
-          className="h-12 w-full rounded-[18px] border-[2px] border-[#0B2A5B] bg-white px-4 text-sm font-black text-[#0B2A5B] outline-none"
-          placeholder={`${member.name}'s signature`}
-          value={caption}
-          onChange={(event) => setCaption(event.target.value)}
-        />
-        <label className="primary-button mt-3">
-          <Camera className="h-5 w-5" /> Take / Upload Group Photo
-          <input className="hidden" type="file" accept="image/*" capture="environment" onChange={(event) => handleFile(event.target.files)} />
-        </label>
-      </div>
+      {!compact && (
+        <div className="mt-4 rounded-[24px] border-[3px] border-[#0B2A5B] bg-[#FFF8E8] p-3">
+          <input
+            className="h-12 w-full rounded-[18px] border-[2px] border-[#0B2A5B] bg-white px-4 text-sm font-black text-[#0B2A5B] outline-none"
+            placeholder={`${member.name}'s signature`}
+            value={caption}
+            onChange={(event) => setCaption(event.target.value)}
+          />
+          <label className="primary-button mt-3">
+            <Camera className="h-5 w-5" /> Take / Upload Group Photo
+            <input className="hidden" type="file" accept="image/*" capture="environment" onChange={(event) => handleFile(event.target.files)} />
+          </label>
+        </div>
+      )}
 
       <div className={`mt-4 ${compact ? "flex gap-3 overflow-x-auto pb-2" : "grid grid-cols-2 gap-3"}`}>
-        {posts.map((post) => (
+        {(compact ? posts.slice(0, 3) : posts).map((post) => (
           <PhotoCard key={post.id} post={post} compact={compact} />
         ))}
       </div>
@@ -688,21 +740,6 @@ function AnnouncementStrip({ delegate }: { delegate: boolean }) {
   );
 }
 
-function GreetingCard({ member }: { member: Member }) {
-  return (
-    <section className="game-card p-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-black text-[#0B2A5B]/60">Hello,</p>
-          <h2 className="text-2xl font-black text-[#0B2A5B]">{member.name}</h2>
-          <p className="mt-2 badge-blue w-fit">{roleLabels[member.role]}</p>
-        </div>
-        <Avatar member={member} large />
-      </div>
-    </section>
-  );
-}
-
 function HeroCard({ title, body, button, onClick }: { title: string; body: string; button: string; onClick?: () => void }) {
   return (
     <section className="relative overflow-hidden rounded-[32px] border-[4px] border-[#0B2A5B] bg-gradient-to-br from-[#FF5A4F] via-[#F6A23A] to-[#FFE26A] p-5 text-[#0B2A5B] shadow-game">
@@ -714,26 +751,6 @@ function HeroCard({ title, body, button, onClick }: { title: string; body: strin
         {button}
       </button>
     </section>
-  );
-}
-
-function StatusGrid() {
-  const status = [
-    ["Pass Active", "Ready"],
-    ["Workshops Joined", "3"],
-    ["Certificate Ready", "1"],
-    ["Welcome Kit Status", "Claim"],
-  ];
-
-  return (
-    <div className="grid grid-cols-2 gap-3">
-      {status.map(([label, value]) => (
-        <section className="game-card p-4" key={label}>
-          <p className="text-2xl font-black text-[#0B2A5B]">{value}</p>
-          <p className="mt-1 text-xs font-black uppercase tracking-[0.08em] text-[#0B2A5B]/55">{label}</p>
-        </section>
-      ))}
-    </div>
   );
 }
 
@@ -862,7 +879,7 @@ function WorkshopsTab({ member }: { member: Member }) {
 
   return (
     <div className="space-y-4">
-      <SectionHeader label="Workshops" title={delegate ? "Choose Your Sessions" : "Preview Sessions"} />
+      <SectionHeader label="Classes" title={delegate ? "My Learning Path" : "Preview Classes"} />
       {workshops.map((workshop) => (
         <WorkshopCard key={workshop.id} workshop={workshop} delegate={delegate} />
       ))}
@@ -968,6 +985,7 @@ function ProfileTab(props: {
   setSelectedRole: (role: UserRole) => void;
   logout: () => void;
 }) {
+  const [editing, setEditing] = useState(false);
   const fields: { key: keyof typeof props.profile; label: string }[] = [
     { key: "stageName", label: "Stage name" },
     { key: "realName", label: "Real name" },
@@ -983,28 +1001,6 @@ function ProfileTab(props: {
     <div className="space-y-4">
       <ClownPassport member={props.member} profile={props.profile} />
 
-      <section className="game-card space-y-3 p-4">
-        <SectionHeader label="Profile" title="Edit Details" compact />
-        {fields.map((field) => (
-          <label key={field.key} className="block">
-            <span className="ml-2 text-[11px] font-black uppercase tracking-[0.1em] text-[#0B2A5B]/55">{field.label}</span>
-            <input
-              className="mt-1 h-12 w-full rounded-[18px] border-[2px] border-[#0B2A5B] bg-[#FFF8E8] px-4 text-sm font-black text-[#0B2A5B] outline-none"
-              value={props.profile[field.key]}
-              onChange={(event) => props.setProfile({ ...props.profile, [field.key]: event.target.value })}
-            />
-          </label>
-        ))}
-        <label className="block">
-          <span className="ml-2 text-[11px] font-black uppercase tracking-[0.1em] text-[#0B2A5B]/55">Short bio</span>
-          <textarea
-            className="mt-1 min-h-24 w-full resize-none rounded-[18px] border-[2px] border-[#0B2A5B] bg-[#FFF8E8] p-4 text-sm font-black text-[#0B2A5B] outline-none"
-            value={props.profile.bio}
-            onChange={(event) => props.setProfile({ ...props.profile, bio: event.target.value })}
-          />
-        </label>
-      </section>
-
       <section className="game-card p-4">
         <SectionHeader label="My Hub" title="Badges & Activity" compact />
         <div className="mt-4 grid grid-cols-2 gap-3">
@@ -1014,6 +1010,34 @@ function ProfileTab(props: {
           <QuickCard icon={Settings} title="Settings" body="Manage" />
         </div>
       </section>
+
+      <button className="primary-button" onClick={() => setEditing((value) => !value)}>
+        <CircleUserRound className="h-5 w-5" /> {editing ? "Done Editing" : "Edit Profile"}
+      </button>
+
+      {editing && (
+        <section className="game-card space-y-3 p-4">
+          <SectionHeader label="Profile" title="Edit Details" compact />
+          {fields.map((field) => (
+            <label key={field.key} className="block">
+              <span className="ml-2 text-[11px] font-black uppercase tracking-[0.1em] text-[#0B2A5B]/55">{field.label}</span>
+              <input
+                className="mt-1 h-12 w-full rounded-[18px] border-[2px] border-[#0B2A5B] bg-[#FFF8E8] px-4 text-sm font-black text-[#0B2A5B] outline-none"
+                value={props.profile[field.key]}
+                onChange={(event) => props.setProfile({ ...props.profile, [field.key]: event.target.value })}
+              />
+            </label>
+          ))}
+          <label className="block">
+            <span className="ml-2 text-[11px] font-black uppercase tracking-[0.1em] text-[#0B2A5B]/55">Short bio</span>
+            <textarea
+              className="mt-1 min-h-24 w-full resize-none rounded-[18px] border-[2px] border-[#0B2A5B] bg-[#FFF8E8] p-4 text-sm font-black text-[#0B2A5B] outline-none"
+              value={props.profile.bio}
+              onChange={(event) => props.setProfile({ ...props.profile, bio: event.target.value })}
+            />
+          </label>
+        </section>
+      )}
 
       <section className="game-card p-4">
         <SectionHeader label="Demo" title="Sample Role" compact />
@@ -1156,14 +1180,7 @@ function BottomTabs({ activeTab, setActiveTab }: { activeTab: Tab; setActiveTab:
               onClick={() => setActiveTab(tab.id)}
             >
               <Icon className="h-5 w-5" strokeWidth={3} />
-              {tab.id === "workshops" ? (
-                <span className="flex flex-col items-center leading-[0.72rem]">
-                  <span>Work</span>
-                  <span>shops</span>
-                </span>
-              ) : (
-                <span>{tab.label}</span>
-              )}
+              <span>{tab.label}</span>
             </button>
           );
         })}
