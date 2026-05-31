@@ -9,9 +9,9 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/bicc-logo.png",
+      "sizes": "2196x2196",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ]

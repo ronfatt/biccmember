@@ -28,7 +28,6 @@ import {
   Send,
   Settings,
   ShieldCheck,
-  Sparkles,
   Star,
   Ticket,
   Trophy,
@@ -327,14 +326,18 @@ function PatternLayer() {
 function LogoMark({ large = false }: { large?: boolean }) {
   return (
     <div
-      className={`relative grid place-items-center rounded-[30px] border-[4px] border-[#0B2A5B] bg-[#FFF8E8] shadow-game ${
-        large ? "h-28 w-28" : "h-14 w-14"
+      className={`relative grid place-items-center overflow-hidden rounded-full border-[4px] border-[#0B2A5B] bg-white shadow-game ${
+        large ? "h-36 w-36" : "h-16 w-16"
       }`}
     >
-      <div className={`grid place-items-center rounded-full bg-gradient-to-br from-[#FF5A4F] to-[#F6A23A] ${large ? "h-16 w-16" : "h-8 w-8"}`}>
-        <Sparkles className={large ? "h-8 w-8 text-white" : "h-5 w-5 text-white"} strokeWidth={3} />
-      </div>
-      <span className={`absolute rounded-full bg-[#FF5A4F] ${large ? "-bottom-2 h-8 w-8" : "-bottom-1 h-4 w-4"} border-[4px] border-[#0B2A5B]`} />
+      <Image
+        alt="Borneo International Clown Convention logo"
+        className="h-full w-full object-contain"
+        height={large ? 144 : 64}
+        priority={large}
+        src="/bicc-logo.png"
+        width={large ? 144 : 64}
+      />
     </div>
   );
 }
