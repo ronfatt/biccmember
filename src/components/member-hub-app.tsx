@@ -42,6 +42,15 @@ import type { Member, UserRole, Workshop } from "@/lib/types";
 
 type AuthScreen = "splash" | "login" | "create" | "forgot";
 type Tab = "home" | "pass" | "workshops" | "network" | "profile";
+type PhotoPost = {
+  id: string;
+  author: string;
+  country: string;
+  caption: string;
+  createdAt: string;
+  imageUrl?: string;
+  color: string;
+};
 type ProfileState = {
   stageName: string;
   realName: string;
@@ -80,6 +89,32 @@ const skillsByMember: Record<string, string[]> = {
 };
 
 const delegateRoles: UserRole[] = ["delegate", "verified_performer", "mentor", "admin"];
+const samplePhotoPosts: PhotoPost[] = [
+  {
+    id: "photo-001",
+    author: "Marco Silva",
+    country: "Portugal",
+    caption: "Stagecraft crew warm-up",
+    createdAt: "Today",
+    color: "from-[#7DD3FC] to-[#7FE6C3]",
+  },
+  {
+    id: "photo-002",
+    author: "Lina Chen",
+    country: "Singapore",
+    caption: "Balloon lab friends",
+    createdAt: "Yesterday",
+    color: "from-[#FFE26A] to-[#F6A23A]",
+  },
+  {
+    id: "photo-003",
+    author: "Aina Rahman",
+    country: "Malaysia",
+    caption: "BICC smiles unlocked",
+    createdAt: "Demo",
+    color: "from-[#FF5A4F] to-[#FFE26A]",
+  },
+];
 
 function hasDelegateAccess(role: UserRole) {
   return delegateRoles.includes(role);
@@ -93,6 +128,18 @@ export function MemberHubApp() {
   const [password, setPassword] = useState("bicchub2026");
   const [notice, setNotice] = useState("");
   const [selectedRole, setSelectedRole] = useState<UserRole>("delegate");
+  const [photoPosts, setPhotoPosts] = useState<PhotoPost[]>(() => {
+    if (typeof window === "undefined") {
+      return samplePhotoPosts;
+    }
+
+    try {
+      const savedPhotos = window.localStorage.getItem("bicc-photo-wall");
+      return savedPhotos ? (JSON.parse(savedPhotos) as PhotoPost[]) : samplePhotoPosts;
+    } catch {
+      return samplePhotoPosts;
+    }
+  });
   const [profile, setProfile] = useState({
     stageName: "Aina Rahman",
     realName: "Aina Rahman",
@@ -110,6 +157,10 @@ export function MemberHubApp() {
       navigator.serviceWorker.register("/sw.js").catch(() => undefined);
     }
   }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem("bicc-photo-wall", JSON.stringify(photoPosts));
+  }, [photoPosts]);
 
   const member = useMemo(() => {
     if (!currentMember) {
@@ -181,6 +232,29 @@ export function MemberHubApp() {
     setNotice("Enter your email. Supabase reset emails work once credentials are configured.");
   }
 
+  function addPhotoPost(file: File, caption: string) {
+    if (!member) {
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setPhotoPosts((posts) => [
+        {
+          id: `photo-${Date.now()}`,
+          author: member.name,
+          country: member.country,
+          caption: caption || "BICC memory",
+          createdAt: "Just now",
+          imageUrl: String(reader.result),
+          color: "from-[#7DD3FC] to-[#FFE26A]",
+        },
+        ...posts,
+      ]);
+    };
+    reader.readAsDataURL(file);
+  }
+
   return (
     <ResponsiveStage>
       {!member ? (
@@ -201,10 +275,10 @@ export function MemberHubApp() {
           <PatternLayer />
           <AppHeader member={member} />
           <section className="mobile-scrollbar relative z-10 flex-1 overflow-y-auto px-5 pb-28 pt-3">
-            {activeTab === "home" && <HomeTab member={member} setActiveTab={setActiveTab} />}
+            {activeTab === "home" && <HomeTab member={member} setActiveTab={setActiveTab} photoPosts={photoPosts} onAddPhoto={addPhotoPost} />}
             {activeTab === "pass" && <PassTab member={member} />}
             {activeTab === "workshops" && <WorkshopsTab member={member} />}
-            {activeTab === "network" && <NetworkTab member={member} />}
+            {activeTab === "network" && <NetworkTab member={member} photoPosts={photoPosts} onAddPhoto={addPhotoPost} />}
             {activeTab === "profile" && (
               <ProfileTab
                 member={member}
@@ -391,7 +465,17 @@ function AppHeader({ member }: { member: Member }) {
   );
 }
 
-function HomeTab({ member, setActiveTab }: { member: Member; setActiveTab: (tab: Tab) => void }) {
+function HomeTab({
+  member,
+  setActiveTab,
+  photoPosts,
+  onAddPhoto,
+}: {
+  member: Member;
+  setActiveTab: (tab: Tab) => void;
+  photoPosts: PhotoPost[];
+  onAddPhoto: (file: File, caption: string) => void;
+}) {
   if (member.role === "admin") {
     return <AdminDashboard />;
   }
@@ -407,6 +491,7 @@ function HomeTab({ member, setActiveTab }: { member: Member; setActiveTab: (tab:
         button={delegate ? "View Pass" : "Become BICC Delegate"}
         onClick={() => setActiveTab(delegate ? "pass" : "home")}
       />
+      <PhotoWall member={member} posts={photoPosts} onAddPhoto={onAddPhoto} compact />
 
       {delegate ? (
         <>
@@ -436,6 +521,85 @@ function HomeTab({ member, setActiveTab }: { member: Member; setActiveTab: (tab:
       )}
       <AnnouncementStrip delegate={delegate} />
     </div>
+  );
+}
+
+function PhotoWall({
+  member,
+  posts,
+  onAddPhoto,
+  compact = false,
+}: {
+  member: Member;
+  posts: PhotoPost[];
+  onAddPhoto: (file: File, caption: string) => void;
+  compact?: boolean;
+}) {
+  const [caption, setCaption] = useState("");
+
+  function handleFile(fileList: FileList | null) {
+    const file = fileList?.[0];
+    if (!file) {
+      return;
+    }
+    onAddPhoto(file, caption);
+    setCaption("");
+  }
+
+  return (
+    <section className="game-card overflow-hidden p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <SectionHeader label="Photo Wall" title="合照签名铺" compact />
+          <p className="mt-2 text-sm font-bold leading-5 text-[#0B2A5B]/65">拍合照、写一句签名，大家都可以在这里浏览。</p>
+        </div>
+        <div className="grid h-12 w-12 shrink-0 place-items-center rounded-[20px] border-[3px] border-[#0B2A5B] bg-[#FFE26A]">
+          <Camera className="h-6 w-6 text-[#0B2A5B]" strokeWidth={3} />
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-[24px] border-[3px] border-[#0B2A5B] bg-[#FFF8E8] p-3">
+        <input
+          className="h-12 w-full rounded-[18px] border-[2px] border-[#0B2A5B] bg-white px-4 text-sm font-black text-[#0B2A5B] outline-none"
+          placeholder={`${member.name}'s signature`}
+          value={caption}
+          onChange={(event) => setCaption(event.target.value)}
+        />
+        <label className="primary-button mt-3">
+          <Camera className="h-5 w-5" /> Take / Upload Group Photo
+          <input className="hidden" type="file" accept="image/*" capture="environment" onChange={(event) => handleFile(event.target.files)} />
+        </label>
+      </div>
+
+      <div className={`mt-4 ${compact ? "flex gap-3 overflow-x-auto pb-2" : "grid grid-cols-2 gap-3"}`}>
+        {posts.map((post) => (
+          <PhotoCard key={post.id} post={post} compact={compact} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function PhotoCard({ post, compact }: { post: PhotoPost; compact?: boolean }) {
+  return (
+    <article className={`${compact ? "w-[152px] shrink-0" : ""} overflow-hidden rounded-[24px] border-[3px] border-[#0B2A5B] bg-white shadow-[0_4px_0_#0B2A5B]`}>
+      <div className={`relative grid aspect-[4/3] place-items-center bg-gradient-to-br ${post.color}`}>
+        {post.imageUrl ? (
+          // Uploaded demo images are already local data URLs, so optimization is not useful here.
+          <Image alt={post.caption} className="h-full w-full object-cover" height={180} src={post.imageUrl} unoptimized width={240} />
+        ) : (
+          <div className="text-center text-[#0B2A5B]">
+            <Users className="mx-auto h-8 w-8" strokeWidth={3} />
+            <p className="mt-2 text-xs font-black uppercase tracking-[0.08em]">Group Shot</p>
+          </div>
+        )}
+        <span className="absolute right-2 top-2 rounded-full border-2 border-[#0B2A5B] bg-white px-2 py-1 text-[10px] font-black text-[#0B2A5B]">{post.createdAt}</span>
+      </div>
+      <div className="p-3">
+        <h3 className="text-sm font-black leading-tight text-[#0B2A5B]">{post.caption}</h3>
+        <p className="mt-1 text-xs font-bold text-[#0B2A5B]/60">{post.author} · {post.country}</p>
+      </div>
+    </article>
   );
 }
 
@@ -640,12 +804,21 @@ function WorkshopCard({ workshop, delegate }: { workshop: Workshop; delegate: bo
   );
 }
 
-function NetworkTab({ member }: { member: Member }) {
+function NetworkTab({
+  member,
+  photoPosts,
+  onAddPhoto,
+}: {
+  member: Member;
+  photoPosts: PhotoPost[];
+  onAddPhoto: (file: File, caption: string) => void;
+}) {
   const delegate = hasDelegateAccess(member.role);
   const visibleMembers = delegate ? members.filter((item) => item.role !== "admin") : members.filter((item) => item.role !== "admin").slice(0, 3);
 
   return (
     <div className="space-y-4">
+      <PhotoWall member={member} posts={photoPosts} onAddPhoto={onAddPhoto} />
       <label className="flex h-14 items-center gap-3 rounded-[24px] border-[3px] border-[#0B2A5B] bg-white px-4 shadow-game">
         <Search className="h-5 w-5 text-[#FF5A4F]" strokeWidth={3} />
         <input className="min-w-0 flex-1 bg-transparent text-sm font-black text-[#0B2A5B] outline-none" placeholder="Search members" />
