@@ -11,8 +11,11 @@ import {
   Camera,
   CheckCircle2,
   CircleUserRound,
+  Clock,
   Copy,
   Eye,
+  Gift,
+  HeartHandshake,
   Home,
   IdCard,
   Link,
@@ -21,6 +24,7 @@ import {
   Mail,
   MapPin,
   Megaphone,
+  MessageCircle,
   Network,
   QrCode,
   Save,
@@ -85,6 +89,20 @@ const skillsByMember: Record<string, string[]> = {
   "m-003": ["Balloons", "Props", "Family"],
   "m-004": ["Juggling", "Beginner", "Street"],
   "m-005": ["Ops", "Admin", "Check-in"],
+};
+
+const workshopTags: Record<string, string[]> = {
+  "w-101": ["Performer track", "Physical comedy", "Stage"],
+  "w-102": ["Hospital clowning", "Gentle play", "Care spaces"],
+  "w-103": ["Props", "Family show", "Beginner friendly"],
+  "w-104": ["Mentor clinic", "Portfolio", "Limited seats"],
+};
+
+const collaborationStatus: Record<string, string> = {
+  "m-001": "Open to outreach",
+  "m-002": "Mentor slots open",
+  "m-003": "Open to collaborate",
+  "m-004": "Looking for practice buddy",
 };
 
 const delegateRoles: UserRole[] = ["delegate", "verified_performer", "mentor", "admin"];
@@ -488,6 +506,7 @@ function HomeTab({
   return (
     <div className="space-y-4">
       <GreetingCard member={member} />
+      <TodayMission member={member} delegate={delegate} setActiveTab={setActiveTab} />
       <HeroCard
         title={delegate ? "Your Convention Journey Starts Here" : "Unlock Your BICC Delegate Access"}
         body={delegate ? "Pass, workshops, certificates, and updates in one playful pocket hub." : "Open the full hub with QR pass, workshops, certificates, and network access."}
@@ -524,6 +543,49 @@ function HomeTab({
       )}
       <AnnouncementStrip delegate={delegate} />
     </div>
+  );
+}
+
+function TodayMission({ member, delegate, setActiveTab }: { member: Member; delegate: boolean; setActiveTab: (tab: Tab) => void }) {
+  const missions = delegate
+    ? [
+        { icon: IdCard, label: "Show pass", value: "Active", action: () => setActiveTab("pass") },
+        { icon: Clock, label: "Next session", value: "10:00 AM", action: () => setActiveTab("workshops") },
+        { icon: Gift, label: "Welcome kit", value: "Ready", action: () => setActiveTab("pass") },
+      ]
+    : [
+        { icon: CircleUserRound, label: "Profile", value: "Update", action: () => setActiveTab("profile") },
+        { icon: Ticket, label: "Workshops", value: "Preview", action: () => setActiveTab("workshops") },
+        { icon: LockKeyhole, label: "Delegate", value: "Unlock", action: () => setActiveTab("home") },
+      ];
+
+  return (
+    <section className="game-card p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="badge-yellow w-fit">Today</p>
+          <h2 className="mt-2 text-2xl font-black leading-none text-[#0B2A5B]">
+            {delegate ? "Ready for today?" : "Start your hub"}
+          </h2>
+          <p className="mt-2 text-sm font-bold text-[#0B2A5B]/60">{member.country} delegate companion</p>
+        </div>
+        <div className="grid h-14 w-14 place-items-center rounded-[22px] border-[3px] border-[#0B2A5B] bg-[#7DD3FC] shadow-[0_4px_0_#0B2A5B]">
+          <CheckCircle2 className="h-7 w-7 text-[#0B2A5B]" strokeWidth={3} />
+        </div>
+      </div>
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        {missions.map((mission) => {
+          const Icon = mission.icon;
+          return (
+            <button className="rounded-[20px] border-[2px] border-[#0B2A5B] bg-[#FFF8E8] p-3 text-left shadow-[0_3px_0_#0B2A5B]" key={mission.label} onClick={mission.action}>
+              <Icon className="h-5 w-5 text-[#FF5A4F]" strokeWidth={3} />
+              <p className="mt-2 text-[10px] font-black uppercase leading-tight tracking-[0.05em] text-[#0B2A5B]/55">{mission.label}</p>
+              <p className="mt-1 text-sm font-black leading-tight text-[#0B2A5B]">{mission.value}</p>
+            </button>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -735,8 +797,36 @@ function PassTab({ member }: { member: Member }) {
           <Save className="h-5 w-5" /> Save Pass
         </button>
       </div>
+      <PassStatusBoard />
       {modalOpen && <QrModal member={member} qr={qr} close={() => setModalOpen(false)} />}
     </div>
+  );
+}
+
+function PassStatusBoard() {
+  const items = [
+    { icon: CheckCircle2, title: "Check-in", value: "Ready" },
+    { icon: CalendarCheck, title: "Attendance", value: "0/3 marked" },
+    { icon: Gift, title: "Welcome Kit", value: "Claim at desk" },
+    { icon: MessageCircle, title: "Staff Help", value: "Available" },
+  ];
+
+  return (
+    <section className="game-card p-4">
+      <SectionHeader label="Live Status" title="On-site Tools" compact />
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        {items.map((item) => {
+          const Icon = item.icon;
+          return (
+            <div className="rounded-[20px] bg-[#FFF8E8] p-3" key={item.title}>
+              <Icon className="h-5 w-5 text-[#FF5A4F]" strokeWidth={3} />
+              <p className="mt-2 text-sm font-black text-[#0B2A5B]">{item.title}</p>
+              <p className="mt-1 text-xs font-bold text-[#0B2A5B]/60">{item.value}</p>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -796,6 +886,11 @@ function WorkshopCard({ workshop, delegate }: { workshop: Workshop; delegate: bo
         <Ticket className="h-8 w-8 text-[#FF5A4F]" strokeWidth={3} />
       </div>
       <p className="mt-3 text-sm font-semibold leading-5 text-[#0B2A5B]/70">{workshop.preview}</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {(workshopTags[workshop.id] || [workshop.track]).map((tag) => (
+          <span className="skill-badge" key={tag}>{tag}</span>
+        ))}
+      </div>
       <div className="mt-4 flex items-center justify-between rounded-[20px] bg-[#FFF8E8] px-4 py-3 text-xs font-black text-[#0B2A5B]">
         <span>{workshop.time}</span>
         <span>{workshop.capacity - workshop.registered} seats left</span>
@@ -828,24 +923,34 @@ function NetworkTab({
       </label>
       {!delegate && <LockedCard feature="Full Network" value="Delegates can view full profiles, contact links, and connect with mentors." />}
       {visibleMembers.map((item) => (
-        <section className="game-card p-4" key={item.id}>
+        <section className="game-card overflow-hidden p-4" key={item.id}>
           <div className="flex items-start gap-3">
             <Avatar member={item} large />
             <div className="min-w-0 flex-1">
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <h3 className="text-lg font-black leading-tight text-[#0B2A5B]">{item.name}</h3>
-                  <p className="mt-1 text-sm font-bold text-[#0B2A5B]/60">{item.country}</p>
+                  <p className="mt-1 flex items-center gap-1 text-sm font-bold text-[#0B2A5B]/60">
+                    <MapPin className="h-4 w-4" strokeWidth={3} /> {item.country}
+                  </p>
                 </div>
                 <p className="badge-blue shrink-0">{item.role === "hub_member" ? "Member" : roleLabels[item.role]}</p>
+              </div>
+              <div className="mt-3 rounded-[18px] bg-gradient-to-r from-[#7DD3FC] to-[#7FE6C3] px-3 py-2">
+                <p className="text-[10px] font-black uppercase tracking-[0.08em] text-[#0B2A5B]/60">Clown style</p>
+                <p className="text-sm font-black text-[#0B2A5B]">{item.specialty}</p>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 {(skillsByMember[item.id] || ["Comedy"]).map((skill) => (
                   <span className="skill-badge" key={skill}>{skill}</span>
                 ))}
               </div>
+              <div className="mt-3 flex items-center gap-2 rounded-[18px] bg-[#FFF8E8] px-3 py-2">
+                <HeartHandshake className="h-5 w-5 shrink-0 text-[#FF5A4F]" strokeWidth={3} />
+                <p className="text-xs font-black text-[#0B2A5B]">{collaborationStatus[item.id] || "Open to meet"}</p>
+              </div>
               <button className={delegate ? "mini-button mt-4 w-full" : "mini-button mt-4 w-full opacity-65"}>
-                {delegate ? "Connect" : "Contact Locked"}
+                {delegate ? "Connect / View Contact" : "Contact Locked"}
               </button>
             </div>
           </div>
@@ -876,20 +981,7 @@ function ProfileTab(props: {
 
   return (
     <div className="space-y-4">
-      <section className="game-card p-4">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <Avatar member={props.member} large />
-            <span className="absolute -bottom-1 -right-1 grid h-8 w-8 place-items-center rounded-full border-[3px] border-[#0B2A5B] bg-[#FFE26A]">
-              <Camera className="h-4 w-4 text-[#0B2A5B]" strokeWidth={3} />
-            </span>
-          </div>
-          <div>
-            <p className="badge-mint w-fit">{roleLabels[props.member.role]}</p>
-            <h2 className="mt-2 text-2xl font-black text-[#0B2A5B]">{props.profile.stageName}</h2>
-          </div>
-        </div>
-      </section>
+      <ClownPassport member={props.member} profile={props.profile} />
 
       <section className="game-card space-y-3 p-4">
         <SectionHeader label="Profile" title="Edit Details" compact />
@@ -936,6 +1028,48 @@ function ProfileTab(props: {
         </select>
       </section>
       <button className="secondary-button w-full" onClick={props.logout}>Log out</button>
+    </div>
+  );
+}
+
+function ClownPassport({ member, profile }: { member: Member; profile: ProfileState }) {
+  const skillList = profile.skills.split(",").map((skill) => skill.trim()).filter(Boolean).slice(0, 4);
+
+  return (
+    <section className="relative overflow-hidden rounded-[32px] border-[4px] border-[#0B2A5B] bg-gradient-to-br from-white via-[#FFF8E8] to-[#7DD3FC] p-4 shadow-game">
+      <div className="absolute -right-10 -top-10 h-28 w-28 rounded-full bg-[#FFE26A]/70" />
+      <div className="relative flex items-center gap-3">
+        <div className="relative">
+          <Avatar member={member} large />
+          <span className="absolute -bottom-1 -right-1 grid h-8 w-8 place-items-center rounded-full border-[3px] border-[#0B2A5B] bg-[#FFE26A]">
+            <Camera className="h-4 w-4 text-[#0B2A5B]" strokeWidth={3} />
+          </span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="badge-dark w-fit">Clown Passport</p>
+          <h2 className="mt-2 text-2xl font-black leading-none text-[#0B2A5B]">{profile.stageName}</h2>
+          <p className="mt-1 text-sm font-bold text-[#0B2A5B]/65">{profile.country} · {profile.category}</p>
+        </div>
+      </div>
+      <div className="relative mt-4 grid grid-cols-3 gap-2">
+        <PassportStamp label="Role" value={roleLabels[member.role].replace(" 2026", "")} />
+        <PassportStamp label="Workshops" value="3" />
+        <PassportStamp label="Certs" value={`${certificates.length}`} />
+      </div>
+      <div className="relative mt-4 flex flex-wrap gap-2">
+        {skillList.map((skill) => (
+          <span className="skill-badge bg-white" key={skill}>{skill}</span>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function PassportStamp({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-[18px] border-[2px] border-[#0B2A5B] bg-white/80 p-2 text-center">
+      <p className="text-[9px] font-black uppercase tracking-[0.08em] text-[#0B2A5B]/50">{label}</p>
+      <p className="mt-1 truncate text-sm font-black text-[#0B2A5B]">{value}</p>
     </div>
   );
 }
