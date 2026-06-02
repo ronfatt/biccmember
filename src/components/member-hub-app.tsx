@@ -40,6 +40,18 @@ import {
 } from "lucide-react";
 import { announcements, certificates, members, workshops } from "@/lib/sample-data";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
+import {
+  approveDelegate,
+  exportMembersCsv,
+  getCurrentProfile,
+  issueCertificate,
+  markWorkshopAttendance,
+  moderatePhoto,
+  recordQrCheckIn,
+  registerWorkshop,
+  sendAnnouncement,
+  uploadPhotoPost,
+} from "@/lib/hub-actions";
 import type { Member, UserRole, Workshop } from "@/lib/types";
 
 type AuthScreen = "splash" | "login" | "create" | "forgot";
@@ -143,6 +155,7 @@ export function MemberHubApp() {
   const [email, setEmail] = useState("delegate@bicc.test");
   const [password, setPassword] = useState("bicchub2026");
   const [notice, setNotice] = useState("");
+  const [actionNotice, setActionNotice] = useState("Demo mode: Supabase actions will run when env vars are configured.");
   const [selectedRole, setSelectedRole] = useState<UserRole>("delegate");
   const [photoPosts, setPhotoPosts] = useState<PhotoPost[]>(() => {
     if (typeof window === "undefined") {
@@ -200,9 +213,39 @@ export function MemberHubApp() {
 
     if (supabase && email && password) {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        setNotice("Sample mode active. Add Supabase credentials to enable live auth.");
+      if (!error) {
+        const liveProfile = await getCurrentProfile(supabase);
+        if (liveProfile) {
+          const liveMember = {
+            id: liveProfile.id,
+            name: liveProfile.stage_name || liveProfile.full_name,
+            role: liveProfile.role,
+            city: liveProfile.city || "",
+            country: liveProfile.country || "",
+            specialty: liveProfile.specialty || "Performer",
+            avatar: (liveProfile.stage_name || liveProfile.full_name).slice(0, 2).toUpperCase(),
+            delegateId: liveProfile.delegate_id || undefined,
+            bio: liveProfile.bio || "",
+          };
+          setCurrentMember(liveMember);
+          setSelectedRole(liveProfile.role);
+          setProfile({
+            stageName: liveMember.name,
+            realName: liveProfile.full_name,
+            country: liveMember.country,
+            city: liveMember.city,
+            category: liveMember.specialty,
+            skills: liveProfile.skills?.join(", ") || "Comedy, Movement",
+            bio: liveMember.bio,
+            socials: liveProfile.social_links?.instagram || "",
+            visibility: liveProfile.visibility || "Delegates only",
+          });
+          setActiveTab("home");
+          setActionNotice("Live Supabase profile loaded.");
+          return;
+        }
       }
+      setNotice("Sample mode active. Add Supabase credentials and profiles to enable live auth.");
     }
 
     const sampleMember =
@@ -248,9 +291,30 @@ export function MemberHubApp() {
     setNotice("Enter your email. Supabase reset emails work once credentials are configured.");
   }
 
-  function addPhotoPost(file: File, caption: string) {
-    if (!member) {
-      return;
+  async function addPhotoPost(file: File, caption: string) {
+    if (!member) return;
+
+    const supabase = getSupabaseBrowserClient();
+    if (supabase && member.id.includes("-")) {
+      try {
+        const post = await uploadPhotoPost(supabase, { file, profileId: member.id, caption, country: member.country });
+        setPhotoPosts((posts) => [
+          {
+            id: post.id,
+            author: member.name,
+            country: member.country,
+            caption: post.caption,
+            createdAt: "Just now",
+            imageUrl: post.image_url,
+            color: "from-[#7DD3FC] to-[#FFE26A]",
+          },
+          ...posts,
+        ]);
+        setActionNotice("Photo uploaded to Supabase Storage.");
+        return;
+      } catch (error) {
+        setActionNotice(error instanceof Error ? error.message : "Photo upload failed; using demo preview.");
+      }
     }
 
     const reader = new FileReader();
@@ -267,8 +331,49 @@ export function MemberHubApp() {
         },
         ...posts,
       ]);
+      setActionNotice("Photo saved locally for demo. Configure Supabase Storage for shared uploads.");
     };
     reader.readAsDataURL(file);
+  }
+
+  async function runOrganizerAction(action: string) {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase || !member) {
+      setActionNotice(`${action}: demo preview only. Configure Supabase env vars to run this action.`);
+      return;
+    }
+
+    try {
+      if (action === "QR Check-in") await recordQrCheckIn(supabase, member.id, member.id);
+      if (action === "Approve Delegates") await approveDelegate(supabase, member.id, member.delegateId || `BICC26-${Date.now().toString().slice(-4)}`);
+      if (action === "Mark Attendance") await markWorkshopAttendance(supabase, { workshopId: workshops[0].id, profileId: member.id, attended: true, scannedBy: member.id });
+      if (action === "Issue Certificates") await issueCertificate(supabase, { profileId: member.id, title: "BICC 2026 Delegate Participation", issuedBy: member.id });
+      if (action === "Send Announcement") await sendAnnouncement(supabase, { title: "BICC update", body: "Please check your next class room.", audience: "delegates", createdBy: member.id, urgent: true });
+      if (action === "Photo Moderation") await moderatePhoto(supabase, photoPosts[0]?.id || "", "published");
+      if (action === "Member Export") {
+        const csv = await exportMembersCsv(supabase);
+        setActionNotice(`Member export ready (${csv.split("\n").length - 1} rows).`);
+        return;
+      }
+      setActionNotice(`${action}: live Supabase action completed.`);
+    } catch (error) {
+      setActionNotice(error instanceof Error ? `${action}: ${error.message}` : `${action}: failed`);
+    }
+  }
+
+  async function runWorkshopRegistration(workshopId: string) {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase || !member) {
+      setActionNotice("Class registration demo only. Configure Supabase to register seats.");
+      return;
+    }
+
+    try {
+      await registerWorkshop(supabase, workshopId, member.id);
+      setActionNotice("Class registration saved in Supabase.");
+    } catch (error) {
+      setActionNotice(error instanceof Error ? error.message : "Class registration failed.");
+    }
   }
 
   return (
@@ -291,9 +396,9 @@ export function MemberHubApp() {
           <PatternLayer />
           <AppHeader member={member} />
           <section className="mobile-scrollbar relative z-10 flex-1 overflow-y-auto px-5 pb-28 pt-3">
-            {activeTab === "home" && <HomeTab member={member} setActiveTab={setActiveTab} photoPosts={photoPosts} onAddPhoto={addPhotoPost} />}
+            {activeTab === "home" && <HomeTab member={member} setActiveTab={setActiveTab} photoPosts={photoPosts} onAddPhoto={addPhotoPost} actionNotice={actionNotice} runOrganizerAction={runOrganizerAction} />}
             {activeTab === "pass" && <PassTab member={member} />}
-            {activeTab === "workshops" && <WorkshopsTab member={member} />}
+            {activeTab === "workshops" && <WorkshopsTab member={member} onRegister={runWorkshopRegistration} />}
             {activeTab === "network" && <NetworkTab member={member} photoPosts={photoPosts} onAddPhoto={addPhotoPost} />}
             {activeTab === "profile" && (
               <ProfileTab
@@ -493,14 +598,18 @@ function HomeTab({
   setActiveTab,
   photoPosts,
   onAddPhoto,
+  actionNotice,
+  runOrganizerAction,
 }: {
   member: Member;
   setActiveTab: (tab: Tab) => void;
   photoPosts: PhotoPost[];
   onAddPhoto: (file: File, caption: string) => void;
+  actionNotice: string;
+  runOrganizerAction: (action: string) => void;
 }) {
   if (member.role === "admin") {
-    return <AdminDashboard />;
+    return <AdminDashboard actionNotice={actionNotice} runOrganizerAction={runOrganizerAction} />;
   }
 
   const delegate = hasDelegateAccess(member.role);
@@ -863,20 +972,20 @@ function QrModal({ member, qr, close }: { member: Member; qr: string; close: () 
   );
 }
 
-function WorkshopsTab({ member }: { member: Member }) {
+function WorkshopsTab({ member, onRegister }: { member: Member; onRegister: (workshopId: string) => void }) {
   const delegate = hasDelegateAccess(member.role);
 
   return (
     <div className="space-y-4">
       <SectionHeader label="Classes" title={delegate ? "My Learning Path" : "Preview Classes"} />
       {workshops.map((workshop) => (
-        <WorkshopCard key={workshop.id} workshop={workshop} delegate={delegate} />
+        <WorkshopCard key={workshop.id} workshop={workshop} delegate={delegate} onRegister={onRegister} />
       ))}
     </div>
   );
 }
 
-function WorkshopCard({ workshop, delegate }: { workshop: Workshop; delegate: boolean }) {
+function WorkshopCard({ workshop, delegate, onRegister }: { workshop: Workshop; delegate: boolean; onRegister: (workshopId: string) => void }) {
   const mentor = members.find((item) => item.id === workshop.mentorId);
 
   return (
@@ -901,7 +1010,7 @@ function WorkshopCard({ workshop, delegate }: { workshop: Workshop; delegate: bo
         <span>{workshop.time}</span>
         <span>{workshop.capacity - workshop.registered} seats left</span>
       </div>
-      <button className={delegate ? "primary-button mt-4" : "secondary-button mt-4 w-full"}>
+      <button className={delegate ? "primary-button mt-4" : "secondary-button mt-4 w-full"} onClick={() => delegate && onRegister(workshop.id)}>
         {delegate ? "Register Workshop" : "Delegate Access Required"}
       </button>
     </section>
@@ -1087,7 +1196,7 @@ function PassportStamp({ label, value }: { label: string; value: string }) {
   );
 }
 
-function AdminDashboard() {
+function AdminDashboard({ actionNotice, runOrganizerAction }: { actionNotice: string; runOrganizerAction: (action: string) => void }) {
   const organizerStages = [
     { title: "Pre-event", value: "42", label: "delegate profiles ready" },
     { title: "On-site", value: "186", label: "QR check-ins today" },
@@ -1111,10 +1220,12 @@ function AdminDashboard() {
         <p className="badge-yellow w-fit">Organizer OS</p>
         <h2 className="relative mt-4 text-3xl font-black leading-none">BICC Control Center</h2>
         <p className="relative mt-3 text-sm font-bold leading-5 text-white/75">Run registration, check-in, classes, certificates, announcements and community memory from one mobile command hub.</p>
-        <button className="relative mt-5 flex min-h-14 w-full items-center justify-center gap-2 rounded-[24px] border-2 border-white bg-[#FFE26A] font-black text-[#0B2A5B] shadow-[0_4px_0_rgba(255,255,255,0.45)]">
+        <button className="relative mt-5 flex min-h-14 w-full items-center justify-center gap-2 rounded-[24px] border-2 border-white bg-[#FFE26A] font-black text-[#0B2A5B] shadow-[0_4px_0_rgba(255,255,255,0.45)]" onClick={() => runOrganizerAction("QR Check-in")}>
           <QrCode className="h-5 w-5" /> Open Scanner
         </button>
       </section>
+
+      <section className="game-card p-3 text-xs font-black text-[#0B2A5B]">{actionNotice}</section>
 
       <section className="grid grid-cols-3 gap-2">
         {organizerStages.map((stage) => (
@@ -1142,7 +1253,7 @@ function AdminDashboard() {
         {commandActions.map((action) => {
           const Icon = action.icon;
           return (
-            <button className="rounded-[28px] border-[3px] border-[#0B2A5B] bg-white p-4 text-left shadow-[0_4px_0_#0B2A5B]" key={action.title}>
+            <button className="rounded-[28px] border-[3px] border-[#0B2A5B] bg-white p-4 text-left shadow-[0_4px_0_#0B2A5B]" key={action.title} onClick={() => runOrganizerAction(action.title)}>
               <div className={`grid h-11 w-11 place-items-center rounded-[18px] border-[2px] border-[#0B2A5B] ${action.tone}`}>
                 <Icon className="h-5 w-5 text-[#0B2A5B]" strokeWidth={3} />
               </div>
