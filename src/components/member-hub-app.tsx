@@ -392,6 +392,9 @@ function AuthFlow(props: {
           <button className="secondary-button" onClick={props.createAccount}>
             <UserPlus className="h-5 w-5" /> Create Free Account
           </button>
+          <button className="mini-button w-full" onClick={() => props.login("admin")}>
+            <ShieldCheck className="h-4 w-4" /> Organizer Demo
+          </button>
           <p className="text-center text-xs font-black uppercase tracking-[0.12em] text-[#0B2A5B]/55">Powered by Borneo Clown Hub</p>
         </section>
       </main>
@@ -736,20 +739,6 @@ function AnnouncementStrip({ delegate }: { delegate: boolean }) {
           </div>
         ))}
       </div>
-    </section>
-  );
-}
-
-function HeroCard({ title, body, button, onClick }: { title: string; body: string; button: string; onClick?: () => void }) {
-  return (
-    <section className="relative overflow-hidden rounded-[32px] border-[4px] border-[#0B2A5B] bg-gradient-to-br from-[#FF5A4F] via-[#F6A23A] to-[#FFE26A] p-5 text-[#0B2A5B] shadow-game">
-      <div className="absolute -right-8 -top-8 h-28 w-28 rounded-full border-[12px] border-white/45" />
-      <p className="badge-dark w-fit">Delegate Quest</p>
-      <h2 className="relative mt-4 text-3xl font-black leading-none">{title}</h2>
-      <p className="relative mt-3 text-sm font-extrabold leading-5 text-[#0B2A5B]/75">{body}</p>
-      <button className="relative mt-5 h-12 rounded-[20px] border-[3px] border-[#0B2A5B] bg-white px-5 text-sm font-black text-[#0B2A5B] shadow-[0_5px_0_#0B2A5B]" onClick={onClick}>
-        {button}
-      </button>
     </section>
   );
 }
@@ -1099,36 +1088,90 @@ function PassportStamp({ label, value }: { label: string; value: string }) {
 }
 
 function AdminDashboard() {
-  const adminActions = [
-    ["Members", "248", Users],
-    ["Approve Delegate", "12", CheckCircle2],
-    ["Workshops", "4", CalendarCheck],
-    ["QR Check-in", "Scan", QrCode],
-    ["Attendance", "Mark", Eye],
-    ["Certificates", "Issue", Award],
-    ["Announcements", "Send", Megaphone],
-    ["Export Data", "CSV", Save],
-  ] as const;
+  const organizerStages = [
+    { title: "Pre-event", value: "42", label: "delegate profiles ready" },
+    { title: "On-site", value: "186", label: "QR check-ins today" },
+    { title: "Post-event", value: "73", label: "certificates queued" },
+  ];
+  const commandActions = [
+    { icon: QrCode, title: "QR Check-in", body: "Scan delegate passes and welcome kits", tone: "bg-[#7DD3FC]" },
+    { icon: CheckCircle2, title: "Approve Delegates", body: "12 pending upgrades to review", tone: "bg-[#7FE6C3]" },
+    { icon: Eye, title: "Mark Attendance", body: "Workshop attendance by room", tone: "bg-[#FFE26A]" },
+    { icon: Award, title: "Issue Certificates", body: "Batch issue eligible records", tone: "bg-[#F6A23A]" },
+    { icon: Megaphone, title: "Send Announcement", body: "Push urgent updates by audience", tone: "bg-[#FF5A4F]" },
+    { icon: Camera, title: "Photo Moderation", body: "Review public wall uploads", tone: "bg-[#7DD3FC]" },
+    { icon: Users, title: "Member Export", body: "CSV for finance and ops", tone: "bg-[#7FE6C3]" },
+    { icon: Gift, title: "Welcome Kit", body: "Track claimed and unclaimed kits", tone: "bg-[#FFE26A]" },
+  ];
 
   return (
     <div className="space-y-4">
-      <HeroCard title="Admin Control Tent" body="Approve, scan, mark attendance, issue certificates, and export member data." button="Open QR Scanner" />
-      <div className="grid grid-cols-2 gap-3">
-        {adminActions.map(([title, body, Icon]) => (
-          <QuickCard key={title} icon={Icon} title={title} body={body} />
-        ))}
-      </div>
-      {workshops.map((item) => (
-        <section className="game-card p-4" key={item.id}>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h3 className="font-black text-[#0B2A5B]">{item.title}</h3>
-              <p className="text-sm font-bold text-[#0B2A5B]/60">{item.registered}/{item.capacity} registered</p>
-            </div>
-            <button className="mini-button">Manage</button>
+      <section className="relative overflow-hidden rounded-[34px] border-[3px] border-[#0B2A5B] bg-gradient-to-br from-[#0B2A5B] to-[#123B77] p-5 text-white shadow-game">
+        <div className="absolute -right-10 -top-10 h-28 w-28 rounded-full bg-[#FFE26A]/25" />
+        <p className="badge-yellow w-fit">Organizer OS</p>
+        <h2 className="relative mt-4 text-3xl font-black leading-none">BICC Control Center</h2>
+        <p className="relative mt-3 text-sm font-bold leading-5 text-white/75">Run registration, check-in, classes, certificates, announcements and community memory from one mobile command hub.</p>
+        <button className="relative mt-5 flex min-h-14 w-full items-center justify-center gap-2 rounded-[24px] border-2 border-white bg-[#FFE26A] font-black text-[#0B2A5B] shadow-[0_4px_0_rgba(255,255,255,0.45)]">
+          <QrCode className="h-5 w-5" /> Open Scanner
+        </button>
+      </section>
+
+      <section className="grid grid-cols-3 gap-2">
+        {organizerStages.map((stage) => (
+          <div className="rounded-[24px] border-[2px] border-[#0B2A5B] bg-white p-3 shadow-[0_3px_0_#0B2A5B]" key={stage.title}>
+            <p className="text-[10px] font-black uppercase tracking-[0.08em] text-[#0B2A5B]/55">{stage.title}</p>
+            <p className="mt-2 text-2xl font-black text-[#0B2A5B]">{stage.value}</p>
+            <p className="mt-1 text-[11px] font-bold leading-tight text-[#0B2A5B]/60">{stage.label}</p>
           </div>
-        </section>
-      ))}
+        ))}
+      </section>
+
+      <section className="game-card p-4">
+        <SectionHeader label="Live Ops" title="Today's Priorities" compact />
+        <div className="mt-4 space-y-3">
+          {["Approve 12 delegate upgrades", "Scan welcome kit claims at front desk", "Mark attendance for Expressive Entrances", "Send 2:00 PM room-change notice"].map((task, index) => (
+            <div className="flex items-center gap-3 rounded-[20px] bg-[#FFF8E8] p-3" key={task}>
+              <span className="grid h-8 w-8 place-items-center rounded-full bg-[#0B2A5B] text-sm font-black text-white">{index + 1}</span>
+              <p className="text-sm font-black leading-tight text-[#0B2A5B]">{task}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <div className="grid grid-cols-2 gap-3">
+        {commandActions.map((action) => {
+          const Icon = action.icon;
+          return (
+            <button className="rounded-[28px] border-[3px] border-[#0B2A5B] bg-white p-4 text-left shadow-[0_4px_0_#0B2A5B]" key={action.title}>
+              <div className={`grid h-11 w-11 place-items-center rounded-[18px] border-[2px] border-[#0B2A5B] ${action.tone}`}>
+                <Icon className="h-5 w-5 text-[#0B2A5B]" strokeWidth={3} />
+              </div>
+              <h3 className="mt-3 text-base font-black leading-tight text-[#0B2A5B]">{action.title}</h3>
+              <p className="mt-1 text-xs font-bold leading-4 text-[#0B2A5B]/60">{action.body}</p>
+            </button>
+          );
+        })}
+      </div>
+
+      <section className="game-card p-4">
+        <SectionHeader label="Capacity" title="Class Rooms" compact />
+        <div className="mt-4 space-y-3">
+          {workshops.map((item) => (
+            <div className="rounded-[22px] bg-[#FFF8E8] p-3" key={item.id}>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-black leading-tight text-[#0B2A5B]">{item.title}</h3>
+                  <p className="text-xs font-bold text-[#0B2A5B]/60">{item.room} · {item.registered}/{item.capacity} registered</p>
+                </div>
+                <button className="mini-button">Manage</button>
+              </div>
+              <div className="mt-3 h-3 overflow-hidden rounded-full bg-white">
+                <div className="h-full rounded-full bg-gradient-to-r from-[#7FE6C3] to-[#F6A23A]" style={{ width: `${Math.round((item.registered / item.capacity) * 100)}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
