@@ -16,6 +16,19 @@ export type HubProfile = {
   social_links: Record<string, string> | null;
 };
 
+export type ProfileUpdateInput = {
+  id: string;
+  full_name: string;
+  stage_name?: string | null;
+  city?: string | null;
+  country?: string | null;
+  specialty?: string | null;
+  skills?: string[];
+  bio?: string | null;
+  visibility?: string | null;
+  social_links?: Record<string, string>;
+};
+
 export async function getCurrentProfile(supabase: SupabaseClient) {
   const { data: userResult, error: userError } = await supabase.auth.getUser();
   if (userError || !userResult.user) return null;
@@ -31,6 +44,28 @@ export async function getCurrentProfile(supabase: SupabaseClient) {
 
 export async function upsertProfile(supabase: SupabaseClient, profile: Partial<HubProfile> & { id: string; full_name: string }) {
   const { data, error } = await supabase.from("profiles").upsert(profile, { onConflict: "id" }).select().single<HubProfile>();
+  if (error) throw error;
+  return data;
+}
+
+export async function saveProfile(supabase: SupabaseClient, profile: ProfileUpdateInput) {
+  const { data, error } = await supabase
+    .from("profiles")
+    .update({
+      full_name: profile.full_name,
+      stage_name: profile.stage_name,
+      city: profile.city,
+      country: profile.country,
+      specialty: profile.specialty,
+      skills: profile.skills || [],
+      bio: profile.bio,
+      visibility: profile.visibility,
+      social_links: profile.social_links || {},
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", profile.id)
+    .select("id, full_name, stage_name, role, city, country, specialty, skills, bio, delegate_id, visibility, social_links")
+    .single<HubProfile>();
   if (error) throw error;
   return data;
 }
@@ -52,12 +87,9 @@ export async function uploadPhotoPost(supabase: SupabaseClient, input: { file: F
 }
 
 export async function registerWorkshop(supabase: SupabaseClient, workshopId: string, profileId: string) {
-  const { data: workshop, error: workshopError } = await supabase.from("workshops_with_counts").select("id, capacity, registered").eq("id", workshopId).single();
-  if (workshopError) throw workshopError;
-  if (workshop.registered >= workshop.capacity) throw new Error("Workshop is full");
-
-  const { data, error } = await supabase.from("workshop_registrations").insert({ workshop_id: workshopId, profile_id: profileId }).select().single();
+  const { data, error } = await supabase.rpc("register_workshop", { p_workshop_id: workshopId });
   if (error) throw error;
+  void profileId;
   return data;
 }
 
@@ -70,6 +102,27 @@ export async function recordQrCheckIn(supabase: SupabaseClient, profileId: strin
   const { data, error } = await supabase.from("check_ins").insert({ profile_id: profileId, scanned_by: scannedBy, source }).select().single();
   if (error) throw error;
   return data;
+}
+
+export async function recordQrCheckInByDelegateId(supabase: SupabaseClient, delegateId: string, scannedBy: string, source = "front_desk") {
+  const normalizedDelegateId = delegateId.trim().split("|")[0]?.trim();
+  if (!normalizedDelegateId) throw new Error("Missing delegate ID");
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("id, full_name, stage_name, delegate_id")
+    .eq("delegate_id", normalizedDelegateId)
+    .maybeSingle();
+  if (profileError) throw profileError;
+  if (!profile) throw new Error("Delegate pass not found");
+
+  const { data, error } = await supabase
+    .from("check_ins")
+    .insert({ profile_id: profile.id, scanned_by: scannedBy, source })
+    .select()
+    .single();
+  if (error) throw error;
+  return { checkIn: data, profile };
 }
 
 export async function markWorkshopAttendance(supabase: SupabaseClient, input: { workshopId: string; profileId: string; attended: boolean; scannedBy?: string }) {

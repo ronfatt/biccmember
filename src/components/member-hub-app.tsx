@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import QRCode from "qrcode";
 import {
@@ -48,8 +48,11 @@ import {
   markWorkshopAttendance,
   moderatePhoto,
   recordQrCheckIn,
+  recordQrCheckInByDelegateId,
   registerWorkshop,
+  saveProfile,
   sendAnnouncement,
+  upsertProfile,
   uploadPhotoPost,
 } from "@/lib/hub-actions";
 import type { Member, UserRole, Workshop } from "@/lib/types";
@@ -103,10 +106,10 @@ const skillsByMember: Record<string, string[]> = {
 };
 
 const workshopTags: Record<string, string[]> = {
-  "w-101": ["Performer track", "Physical comedy", "Stage"],
-  "w-102": ["Hospital clowning", "Gentle play", "Care spaces"],
-  "w-103": ["Props", "Family show", "Beginner friendly"],
-  "w-104": ["Mentor clinic", "Portfolio", "Limited seats"],
+  "11111111-1111-4111-8111-111111111101": ["Performer track", "Physical comedy", "Stage"],
+  "11111111-1111-4111-8111-111111111102": ["Hospital clowning", "Gentle play", "Care spaces"],
+  "11111111-1111-4111-8111-111111111103": ["Props", "Family show", "Beginner friendly"],
+  "11111111-1111-4111-8111-111111111104": ["Mentor clinic", "Portfolio", "Limited seats"],
 };
 
 const collaborationStatus: Record<string, string> = {
@@ -156,6 +159,7 @@ export function MemberHubApp() {
   const [password, setPassword] = useState("bicchub2026");
   const [notice, setNotice] = useState("");
   const [actionNotice, setActionNotice] = useState("Demo mode: Supabase actions will run when env vars are configured.");
+  const [profileNotice, setProfileNotice] = useState("");
   const [selectedRole, setSelectedRole] = useState<UserRole>("delegate");
   const [photoPosts, setPhotoPosts] = useState<PhotoPost[]>(() => {
     if (typeof window === "undefined") {
@@ -244,6 +248,42 @@ export function MemberHubApp() {
           setActionNotice("Live Supabase profile loaded.");
           return;
         }
+        const { data: userResult } = await supabase.auth.getUser();
+        if (userResult.user) {
+          const fallbackName = userResult.user.email?.split("@")[0] || "BICC Member";
+          const createdProfile = await upsertProfile(supabase, {
+            id: userResult.user.id,
+            full_name: fallbackName,
+            stage_name: fallbackName,
+            role: "hub_member",
+          });
+          setCurrentMember({
+            id: createdProfile.id,
+            name: createdProfile.stage_name || createdProfile.full_name,
+            role: createdProfile.role,
+            city: createdProfile.city || "",
+            country: createdProfile.country || "",
+            specialty: createdProfile.specialty || "Performer",
+            avatar: (createdProfile.stage_name || createdProfile.full_name).slice(0, 2).toUpperCase(),
+            delegateId: createdProfile.delegate_id || undefined,
+            bio: createdProfile.bio || "",
+          });
+          setSelectedRole(createdProfile.role);
+          setProfile({
+            stageName: createdProfile.stage_name || createdProfile.full_name,
+            realName: createdProfile.full_name,
+            country: createdProfile.country || "",
+            city: createdProfile.city || "",
+            category: createdProfile.specialty || "Performer",
+            skills: createdProfile.skills?.join(", ") || "",
+            bio: createdProfile.bio || "",
+            socials: createdProfile.social_links?.instagram || "",
+            visibility: createdProfile.visibility || "delegates_only",
+          });
+          setActiveTab("home");
+          setActionNotice("Profile created for this Supabase account.");
+          return;
+        }
       }
       setNotice("Sample mode active. Add Supabase credentials and profiles to enable live auth.");
     }
@@ -275,7 +315,35 @@ export function MemberHubApp() {
   async function createAccount() {
     const supabase = getSupabaseBrowserClient();
     if (supabase && email && password) {
-      await supabase.auth.signUp({ email, password });
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: profile.realName || email.split("@")[0],
+            stage_name: profile.stageName || email.split("@")[0],
+          },
+        },
+      });
+      if (error) {
+        setNotice(error.message);
+        return;
+      }
+      if (data.user && data.session) {
+        await upsertProfile(supabase, {
+          id: data.user.id,
+          full_name: profile.realName || email.split("@")[0],
+          stage_name: profile.stageName || email.split("@")[0],
+          role: "hub_member",
+          country: profile.country,
+          city: profile.city,
+          specialty: profile.category,
+          skills: splitSkills(profile.skills),
+          bio: profile.bio,
+          visibility: profile.visibility,
+          social_links: { instagram: profile.socials },
+        });
+      }
       setNotice("Account request sent. Check email verification if Supabase is configured.");
     }
     await login("hub_member");
@@ -295,7 +363,7 @@ export function MemberHubApp() {
     if (!member) return;
 
     const supabase = getSupabaseBrowserClient();
-    if (supabase && member.id.includes("-")) {
+    if (supabase && isUuid(member.id)) {
       try {
         const post = await uploadPhotoPost(supabase, { file, profileId: member.id, caption, country: member.country });
         setPhotoPosts((posts) => [
@@ -338,7 +406,7 @@ export function MemberHubApp() {
 
   async function runOrganizerAction(action: string) {
     const supabase = getSupabaseBrowserClient();
-    if (!supabase || !member) {
+    if (!supabase || !member || !isUuid(member.id)) {
       setActionNotice(`${action}: demo preview only. Configure Supabase env vars to run this action.`);
       return;
     }
@@ -361,9 +429,25 @@ export function MemberHubApp() {
     }
   }
 
+  async function runQrCheckIn(delegateId: string) {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase || !member || !isUuid(member.id)) {
+      setActionNotice(`QR Check-in demo: ${delegateId || "no pass"} scanned.`);
+      return;
+    }
+
+    try {
+      const result = await recordQrCheckInByDelegateId(supabase, delegateId, member.id);
+      const name = result.profile.stage_name || result.profile.full_name || result.profile.delegate_id;
+      setActionNotice(`Checked in ${name}.`);
+    } catch (error) {
+      setActionNotice(error instanceof Error ? `QR Check-in: ${error.message}` : "QR Check-in failed.");
+    }
+  }
+
   async function runWorkshopRegistration(workshopId: string) {
     const supabase = getSupabaseBrowserClient();
-    if (!supabase || !member) {
+    if (!supabase || !member || !isUuid(member.id)) {
       setActionNotice("Class registration demo only. Configure Supabase to register seats.");
       return;
     }
@@ -373,6 +457,45 @@ export function MemberHubApp() {
       setActionNotice("Class registration saved in Supabase.");
     } catch (error) {
       setActionNotice(error instanceof Error ? error.message : "Class registration failed.");
+    }
+  }
+
+  async function saveMemberProfile() {
+    if (!member) return;
+
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase || !isUuid(member.id)) {
+      setProfileNotice("Profile saved locally for demo. Configure Supabase to persist it.");
+      return;
+    }
+
+    try {
+      const saved = await saveProfile(supabase, {
+        id: member.id,
+        full_name: profile.realName,
+        stage_name: profile.stageName,
+        country: profile.country,
+        city: profile.city,
+        specialty: profile.category,
+        skills: splitSkills(profile.skills),
+        bio: profile.bio,
+        visibility: profile.visibility,
+        social_links: { instagram: profile.socials },
+      });
+      setProfile({
+        stageName: saved.stage_name || saved.full_name,
+        realName: saved.full_name,
+        country: saved.country || "",
+        city: saved.city || "",
+        category: saved.specialty || "",
+        skills: saved.skills?.join(", ") || "",
+        bio: saved.bio || "",
+        socials: saved.social_links?.instagram || "",
+        visibility: saved.visibility || "delegates_only",
+      });
+      setProfileNotice("Profile saved to Supabase.");
+    } catch (error) {
+      setProfileNotice(error instanceof Error ? error.message : "Profile save failed.");
     }
   }
 
@@ -396,7 +519,17 @@ export function MemberHubApp() {
           <PatternLayer />
           <AppHeader member={member} />
           <section className="mobile-scrollbar relative z-10 flex-1 overflow-y-auto px-5 pb-28 pt-3">
-            {activeTab === "home" && <HomeTab member={member} setActiveTab={setActiveTab} photoPosts={photoPosts} onAddPhoto={addPhotoPost} actionNotice={actionNotice} runOrganizerAction={runOrganizerAction} />}
+            {activeTab === "home" && (
+              <HomeTab
+                member={member}
+                setActiveTab={setActiveTab}
+                photoPosts={photoPosts}
+                onAddPhoto={addPhotoPost}
+                actionNotice={actionNotice}
+                runOrganizerAction={runOrganizerAction}
+                runQrCheckIn={runQrCheckIn}
+              />
+            )}
             {activeTab === "pass" && <PassTab member={member} />}
             {activeTab === "workshops" && <WorkshopsTab member={member} onRegister={runWorkshopRegistration} />}
             {activeTab === "network" && <NetworkTab member={member} photoPosts={photoPosts} onAddPhoto={addPhotoPost} />}
@@ -407,6 +540,8 @@ export function MemberHubApp() {
                 setProfile={setProfile}
                 selectedRole={selectedRole}
                 setSelectedRole={setSelectedRole}
+                profileNotice={profileNotice}
+                onSaveProfile={saveMemberProfile}
                 logout={() => {
                   setCurrentMember(null);
                   setAuthScreen("splash");
@@ -443,6 +578,17 @@ function PatternLayer() {
       <div className="circus-pattern absolute inset-0" />
     </div>
   );
+}
+
+function splitSkills(value: string) {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 function LogoMark({ large = false }: { large?: boolean }) {
@@ -600,6 +746,7 @@ function HomeTab({
   onAddPhoto,
   actionNotice,
   runOrganizerAction,
+  runQrCheckIn,
 }: {
   member: Member;
   setActiveTab: (tab: Tab) => void;
@@ -607,9 +754,10 @@ function HomeTab({
   onAddPhoto: (file: File, caption: string) => void;
   actionNotice: string;
   runOrganizerAction: (action: string) => void;
+  runQrCheckIn: (delegateId: string) => void;
 }) {
   if (member.role === "admin") {
-    return <AdminDashboard actionNotice={actionNotice} runOrganizerAction={runOrganizerAction} />;
+    return <AdminDashboard actionNotice={actionNotice} runOrganizerAction={runOrganizerAction} runQrCheckIn={runQrCheckIn} />;
   }
 
   const delegate = hasDelegateAccess(member.role);
@@ -1081,6 +1229,8 @@ function ProfileTab(props: {
   setProfile: (profile: ProfileState) => void;
   selectedRole: UserRole;
   setSelectedRole: (role: UserRole) => void;
+  profileNotice: string;
+  onSaveProfile: () => void;
   logout: () => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -1116,6 +1266,7 @@ function ProfileTab(props: {
       {editing && (
         <section className="game-card space-y-3 p-4">
           <SectionHeader label="Profile" title="Edit Details" compact />
+          {props.profileNotice && <p className="rounded-[18px] bg-[#FFF8E8] px-3 py-2 text-xs font-black text-[#0B2A5B]">{props.profileNotice}</p>}
           {fields.map((field) => (
             <label key={field.key} className="block">
               <span className="ml-2 text-[11px] font-black uppercase tracking-[0.1em] text-[#0B2A5B]/55">{field.label}</span>
@@ -1134,6 +1285,9 @@ function ProfileTab(props: {
               onChange={(event) => props.setProfile({ ...props.profile, bio: event.target.value })}
             />
           </label>
+          <button className="primary-button" onClick={props.onSaveProfile}>
+            <Save className="h-5 w-5" /> Save Profile
+          </button>
         </section>
       )}
 
@@ -1196,7 +1350,16 @@ function PassportStamp({ label, value }: { label: string; value: string }) {
   );
 }
 
-function AdminDashboard({ actionNotice, runOrganizerAction }: { actionNotice: string; runOrganizerAction: (action: string) => void }) {
+function AdminDashboard({
+  actionNotice,
+  runOrganizerAction,
+  runQrCheckIn,
+}: {
+  actionNotice: string;
+  runOrganizerAction: (action: string) => void;
+  runQrCheckIn: (delegateId: string) => void;
+}) {
+  const [scannerOpen, setScannerOpen] = useState(false);
   const organizerStages = [
     { title: "Pre-event", value: "42", label: "delegate profiles ready" },
     { title: "On-site", value: "186", label: "QR check-ins today" },
@@ -1220,7 +1383,7 @@ function AdminDashboard({ actionNotice, runOrganizerAction }: { actionNotice: st
         <p className="badge-yellow w-fit">Organizer OS</p>
         <h2 className="relative mt-4 text-3xl font-black leading-none">BICC Control Center</h2>
         <p className="relative mt-3 text-sm font-bold leading-5 text-white/75">Run registration, check-in, classes, certificates, announcements and community memory from one mobile command hub.</p>
-        <button className="relative mt-5 flex min-h-14 w-full items-center justify-center gap-2 rounded-[24px] border-2 border-white bg-[#FFE26A] font-black text-[#0B2A5B] shadow-[0_4px_0_rgba(255,255,255,0.45)]" onClick={() => runOrganizerAction("QR Check-in")}>
+        <button className="relative mt-5 flex min-h-14 w-full items-center justify-center gap-2 rounded-[24px] border-2 border-white bg-[#FFE26A] font-black text-[#0B2A5B] shadow-[0_4px_0_rgba(255,255,255,0.45)]" onClick={() => setScannerOpen(true)}>
           <QrCode className="h-5 w-5" /> Open Scanner
         </button>
       </section>
@@ -1253,7 +1416,11 @@ function AdminDashboard({ actionNotice, runOrganizerAction }: { actionNotice: st
         {commandActions.map((action) => {
           const Icon = action.icon;
           return (
-            <button className="rounded-[28px] border-[3px] border-[#0B2A5B] bg-white p-4 text-left shadow-[0_4px_0_#0B2A5B]" key={action.title} onClick={() => runOrganizerAction(action.title)}>
+            <button
+              className="rounded-[28px] border-[3px] border-[#0B2A5B] bg-white p-4 text-left shadow-[0_4px_0_#0B2A5B]"
+              key={action.title}
+              onClick={() => (action.title === "QR Check-in" ? setScannerOpen(true) : runOrganizerAction(action.title))}
+            >
               <div className={`grid h-11 w-11 place-items-center rounded-[18px] border-[2px] border-[#0B2A5B] ${action.tone}`}>
                 <Icon className="h-5 w-5 text-[#0B2A5B]" strokeWidth={3} />
               </div>
@@ -1283,7 +1450,110 @@ function AdminDashboard({ actionNotice, runOrganizerAction }: { actionNotice: st
           ))}
         </div>
       </section>
+      {scannerOpen && <QrScannerModal close={() => setScannerOpen(false)} onCheckIn={runQrCheckIn} />}
     </div>
+  );
+}
+
+function QrScannerModal({ close, onCheckIn }: { close: () => void; onCheckIn: (delegateId: string) => void }) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [manualValue, setManualValue] = useState("");
+  const [scannerStatus, setScannerStatus] = useState("Point the camera at a BICC digital pass.");
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer: number | undefined;
+
+    async function startScanner() {
+      const Detector = (window as unknown as { BarcodeDetector?: new (options?: { formats?: string[] }) => { detect: (source: HTMLVideoElement) => Promise<Array<{ rawValue: string }>> } }).BarcodeDetector;
+      if (!navigator.mediaDevices?.getUserMedia || !Detector) {
+        setScannerStatus("Camera scanner is not supported here. Enter the delegate ID manually.");
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+        if (cancelled) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+        }
+        const detector = new Detector({ formats: ["qr_code"] });
+        const scan = async () => {
+          if (cancelled || !videoRef.current) return;
+          try {
+            const codes = await detector.detect(videoRef.current);
+            const rawValue = codes[0]?.rawValue;
+            if (rawValue) {
+              onCheckIn(rawValue);
+              close();
+              return;
+            }
+          } catch {
+            setScannerStatus("Scanning paused. Try manual input if the camera cannot read the QR.");
+          }
+          timer = window.setTimeout(scan, 650);
+        };
+        scan();
+      } catch {
+        setScannerStatus("Camera permission denied. Enter the delegate ID manually.");
+      }
+    }
+
+    startScanner();
+
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+    };
+  }, [close, onCheckIn]);
+
+  function submitManualCheckIn() {
+    if (!manualValue.trim()) {
+      setScannerStatus("Enter a delegate ID first.");
+      return;
+    }
+    onCheckIn(manualValue);
+    close();
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-[90] grid place-items-center bg-[#0B2A5B]/55 px-5 backdrop-blur-md">
+      <section className="w-full max-w-[360px] rounded-[32px] border-[4px] border-[#0B2A5B] bg-white p-5 shadow-game">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="badge-yellow w-fit">Admin Scanner</p>
+            <h2 className="mt-2 text-2xl font-black leading-tight text-[#0B2A5B]">QR Check-in</h2>
+          </div>
+          <button className="grid h-10 w-10 place-items-center rounded-full bg-[#FFF8E8] text-[#0B2A5B]" onClick={close} title="Close">
+            <X className="h-5 w-5" strokeWidth={3} />
+          </button>
+        </div>
+        <div className="mt-4 overflow-hidden rounded-[26px] border-[3px] border-[#0B2A5B] bg-[#071936]">
+          <video ref={videoRef} className="aspect-square w-full object-cover" muted playsInline />
+        </div>
+        <p className="mt-3 rounded-[18px] bg-[#FFF8E8] px-3 py-2 text-xs font-black text-[#0B2A5B]">{scannerStatus}</p>
+        <label className="mt-4 block">
+          <span className="ml-2 text-[11px] font-black uppercase tracking-[0.1em] text-[#0B2A5B]/55">Delegate ID or QR payload</span>
+          <input
+            className="mt-1 h-12 w-full rounded-[18px] border-[2px] border-[#0B2A5B] bg-[#FFF8E8] px-4 text-sm font-black text-[#0B2A5B] outline-none"
+            placeholder="BICC26-0182"
+            value={manualValue}
+            onChange={(event) => setManualValue(event.target.value)}
+          />
+        </label>
+        <button className="primary-button mt-4" onClick={submitManualCheckIn}>
+          <CheckCircle2 className="h-5 w-5" /> Mark Check-in
+        </button>
+      </section>
+    </div>,
+    document.body,
   );
 }
 

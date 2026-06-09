@@ -59,7 +59,7 @@ export const members: Member[] = [
 
 export const workshops: Workshop[] = [
   {
-    id: "w-101",
+    id: "11111111-1111-4111-8111-111111111101",
     title: "Expressive Entrances",
     mentorId: "m-002",
     mentorName: "Marco Silva",
@@ -71,7 +71,7 @@ export const workshops: Workshop[] = [
     preview: "Build a strong first thirty seconds with movement, silence, and focus.",
   },
   {
-    id: "w-102",
+    id: "11111111-1111-4111-8111-111111111102",
     title: "Gentle Comedy in Care Spaces",
     mentorId: "m-001",
     mentorName: "Aina Rahman",
@@ -83,7 +83,7 @@ export const workshops: Workshop[] = [
     preview: "A practical session for consent-led clowning in hospitals and shelters.",
   },
   {
-    id: "w-103",
+    id: "11111111-1111-4111-8111-111111111103",
     title: "Balloon Character Lab",
     mentorId: "m-003",
     mentorName: "Lina Chen",
@@ -95,7 +95,7 @@ export const workshops: Workshop[] = [
     preview: "Turn simple balloon forms into readable characters and quick stories.",
   },
   {
-    id: "w-104",
+    id: "11111111-1111-4111-8111-111111111104",
     title: "Performer Portfolio Clinic",
     mentorId: "m-002",
     mentorName: "Marco Silva",

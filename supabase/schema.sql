@@ -133,6 +133,118 @@ as $$
   select exists(select 1 from public.profiles where id = auth.uid() and role = 'admin');
 $$;
 
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  display_name text;
+begin
+  display_name := coalesce(
+    new.raw_user_meta_data->>'full_name',
+    new.raw_user_meta_data->>'stage_name',
+    split_part(new.email, '@', 1),
+    'BICC Member'
+  );
+
+  insert into public.profiles (id, full_name, stage_name, role)
+  values (
+    new.id,
+    display_name,
+    coalesce(new.raw_user_meta_data->>'stage_name', display_name),
+    'hub_member'
+  )
+  on conflict (id) do nothing;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+after insert on auth.users
+for each row execute function public.handle_new_user();
+
+create or replace function public.prevent_member_role_escalation()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then
+    new.role := old.role;
+    new.delegate_id := old.delegate_id;
+    new.delegate_approved_at := old.delegate_approved_at;
+  end if;
+
+  new.updated_at := now();
+  return new;
+end;
+$$;
+
+drop trigger if exists prevent_member_role_escalation on public.profiles;
+create trigger prevent_member_role_escalation
+before update on public.profiles
+for each row execute function public.prevent_member_role_escalation();
+
+create or replace function public.register_workshop(p_workshop_id uuid)
+returns public.workshop_registrations
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_profile public.profiles;
+  selected_workshop public.workshops;
+  registered_count integer;
+  registration public.workshop_registrations;
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication required';
+  end if;
+
+  select * into current_profile
+  from public.profiles
+  where id = auth.uid();
+
+  if current_profile.id is null then
+    raise exception 'Profile not found';
+  end if;
+
+  if current_profile.role not in ('delegate', 'verified_performer', 'mentor', 'admin') then
+    raise exception 'Delegate access required';
+  end if;
+
+  select * into selected_workshop
+  from public.workshops
+  where id = p_workshop_id
+  for update;
+
+  if selected_workshop.id is null then
+    raise exception 'Workshop not found';
+  end if;
+
+  select count(*)::integer into registered_count
+  from public.workshop_registrations
+  where workshop_id = p_workshop_id;
+
+  if registered_count >= selected_workshop.capacity then
+    raise exception 'Workshop is full';
+  end if;
+
+  insert into public.workshop_registrations (workshop_id, profile_id)
+  values (p_workshop_id, auth.uid())
+  on conflict (workshop_id, profile_id) do update
+    set created_at = public.workshop_registrations.created_at
+  returning * into registration;
+
+  return registration;
+end;
+$$;
+
 alter table public.profiles enable row level security;
 alter table public.workshops enable row level security;
 alter table public.workshop_registrations enable row level security;
