@@ -424,13 +424,13 @@ export function MemberHubApp() {
 
 function ResponsiveStage({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen items-center justify-center p-0 sm:p-6">
+    <div className="flex min-h-[100dvh] items-center justify-center p-0 lg:p-6">
       <div className="hidden max-w-sm pr-8 text-[#FFF8E8] lg:block">
         <p className="badge-dark w-fit">Mobile only</p>
         <h1 className="mt-4 text-3xl font-black leading-tight">BICC Member Hub is designed for mobile use.</h1>
         <p className="mt-3 text-sm font-semibold text-[#FFF8E8]/75">Please open it on your phone.</p>
       </div>
-      <div className="h-screen w-full overflow-hidden bg-[#FFF8E8] shadow-2xl sm:h-[844px] sm:max-w-[390px] sm:rounded-[38px] sm:border-[10px] sm:border-[#061A39]">
+      <div className="h-[100dvh] w-full overflow-hidden bg-[#FFF8E8] shadow-2xl lg:h-[844px] lg:max-w-[390px] lg:rounded-[38px] lg:border-[10px] lg:border-[#061A39]">
         {children}
       </div>
     </div>
