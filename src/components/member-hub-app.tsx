@@ -774,14 +774,11 @@ function AuthFlow(props: {
             BICC
             <span className="block">Member Hub</span>
           </h1>
-          <p className="mt-5 rounded-[22px] border-[2px] border-[#0B2A5B] bg-white/78 px-4 py-3 text-[0.96rem] font-extrabold leading-5 text-[#0B2A5B]/76 shadow-[0_3px_0_#0B2A5B]">
-            Free to join. BICC delegates unlock full access.
-          </p>
         </section>
         <section className="relative z-10 mx-auto w-full max-w-[22rem] space-y-3">
-            <button className="primary-button" onClick={() => setScreen("login")}>
-              <LogIn className="h-5 w-5" /> Login
-            </button>
+          <button className="primary-button" onClick={() => setScreen("login")}>
+            <LogIn className="h-5 w-5" /> Login
+          </button>
           <button className="secondary-button min-h-12 border-[2px] shadow-[0_3px_0_#0B2A5B] text-xs" onClick={() => setScreen("create")}>
             <UserPlus className="h-4 w-4" /> Create Free Account
           </button>
