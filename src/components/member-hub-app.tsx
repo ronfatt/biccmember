@@ -124,7 +124,7 @@ const collaborationStatus: Record<string, string> = {
 };
 
 const delegateRoles: UserRole[] = ["delegate", "verified_performer", "mentor", "admin"];
-const enableDevDemo = process.env.NODE_ENV !== "production";
+const enableDemoMode = true;
 const samplePhotoPosts: PhotoPost[] = [
   {
     id: "photo-001",
@@ -329,7 +329,7 @@ export function MemberHubApp() {
       return;
     }
 
-    if (!enableDevDemo) return;
+    if (!enableDemoMode) return;
 
     const sampleMember =
       role === "admin"
@@ -463,7 +463,7 @@ export function MemberHubApp() {
       }
     }
 
-    if (!enableDevDemo) {
+    if (!enableDemoMode) {
       setActionNotice("Photo upload needs a live Supabase member session.");
       return;
     }
@@ -531,7 +531,7 @@ export function MemberHubApp() {
   async function runWorkshopRegistration(workshopId: string) {
     const supabase = getSupabaseBrowserClient();
     if (!supabase || !member || !isUuid(member.id)) {
-      if (enableDevDemo) joinWorkshopDemo(workshopId);
+      if (enableDemoMode) joinWorkshopDemo(workshopId);
       else setActionNotice("Workshop registration needs a live Supabase member session.");
       return;
     }
@@ -806,7 +806,7 @@ function AuthFlow(props: {
             <button className="primary-button" onClick={() => props.login("delegate")}>
               <LogIn className="h-5 w-5" /> Login
             </button>
-            {enableDevDemo && (
+            {enableDemoMode && (
               <div className="grid grid-cols-2 gap-3">
                 <button className="mini-button" onClick={() => props.login("hub_member")}>Member Demo</button>
                 <button className="mini-button" onClick={() => props.login("admin")}>Admin Demo</button>
@@ -1566,9 +1566,9 @@ function ProfileTab(props: {
         </section>
       )}
 
-      {enableDevDemo && (
+      {enableDemoMode && (
         <section className="game-card p-4">
-          <SectionHeader label="Dev" title="Sample Role" compact />
+          <SectionHeader label="Demo" title="Sample Role" compact />
           <select
             className="mt-3 h-12 w-full rounded-[18px] border-[2px] border-[#0B2A5B] bg-[#FFF8E8] px-4 text-sm font-black text-[#0B2A5B] outline-none"
             value={props.selectedRole}
