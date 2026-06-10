@@ -51,6 +51,15 @@ create table public.workshop_registrations (
   unique (workshop_id, profile_id)
 );
 
+create table public.workshop_waitlist (
+  id uuid primary key default gen_random_uuid(),
+  workshop_id uuid not null references public.workshops(id) on delete cascade,
+  profile_id uuid not null references public.profiles(id) on delete cascade,
+  position integer,
+  created_at timestamptz not null default now(),
+  unique (workshop_id, profile_id)
+);
+
 create or replace view public.workshops_with_counts as
 select
   w.*,
@@ -79,6 +88,7 @@ create table public.photo_posts (
   profile_id uuid not null references public.profiles(id) on delete cascade,
   caption text not null,
   country text,
+  album text not null default 'Day 1',
   image_path text not null,
   image_url text not null,
   status text not null default 'pending' check (status in ('pending', 'published', 'hidden')),
@@ -111,6 +121,7 @@ create table public.certificates (
   status text not null default 'Pending' check (status in ('Ready', 'Pending')),
   issued_by uuid references public.profiles(id),
   issued_at timestamptz,
+  public_url text,
   verification_code text unique default encode(gen_random_bytes(8), 'hex'),
   created_at timestamptz not null default now()
 );
@@ -121,6 +132,26 @@ create table public.performance_submissions (
   title text not null,
   description text not null,
   status text not null default 'submitted',
+  created_at timestamptz not null default now()
+);
+
+create table public.delegate_applications (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles(id) on delete cascade unique,
+  status text not null default 'submitted' check (status in ('draft', 'submitted', 'approved', 'rejected', 'needs_info')),
+  notes text,
+  reviewed_by uuid references public.profiles(id),
+  reviewed_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table public.ops_audit_logs (
+  id uuid primary key default gen_random_uuid(),
+  actor_id uuid references public.profiles(id),
+  target_profile_id uuid references public.profiles(id),
+  action text not null,
+  metadata jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()
 );
 
@@ -245,9 +276,72 @@ begin
 end;
 $$;
 
+create or replace function public.join_workshop_waitlist(p_workshop_id uuid)
+returns public.workshop_waitlist
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  next_position integer;
+  waitlist_entry public.workshop_waitlist;
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication required';
+  end if;
+
+  select coalesce(max(position), 0) + 1 into next_position
+  from public.workshop_waitlist
+  where workshop_id = p_workshop_id;
+
+  insert into public.workshop_waitlist (workshop_id, profile_id, position)
+  values (p_workshop_id, auth.uid(), next_position)
+  on conflict (workshop_id, profile_id) do update
+    set position = public.workshop_waitlist.position
+  returning * into waitlist_entry;
+
+  return waitlist_entry;
+end;
+$$;
+
+create or replace function public.approve_delegate_application(p_profile_id uuid, p_delegate_id text)
+returns public.profiles
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  approved_profile public.profiles;
+begin
+  if not public.is_admin() then
+    raise exception 'Admin access required';
+  end if;
+
+  update public.profiles
+  set role = 'delegate',
+      delegate_id = p_delegate_id,
+      delegate_approved_at = now()
+  where id = p_profile_id
+  returning * into approved_profile;
+
+  update public.delegate_applications
+  set status = 'approved',
+      reviewed_by = auth.uid(),
+      reviewed_at = now(),
+      updated_at = now()
+  where profile_id = p_profile_id;
+
+  insert into public.ops_audit_logs (actor_id, target_profile_id, action, metadata)
+  values (auth.uid(), p_profile_id, 'approve_delegate', jsonb_build_object('delegate_id', p_delegate_id));
+
+  return approved_profile;
+end;
+$$;
+
 alter table public.profiles enable row level security;
 alter table public.workshops enable row level security;
 alter table public.workshop_registrations enable row level security;
+alter table public.workshop_waitlist enable row level security;
 alter table public.check_ins enable row level security;
 alter table public.welcome_kit_claims enable row level security;
 alter table public.photo_posts enable row level security;
@@ -255,6 +349,8 @@ alter table public.photo_reactions enable row level security;
 alter table public.announcements enable row level security;
 alter table public.certificates enable row level security;
 alter table public.performance_submissions enable row level security;
+alter table public.delegate_applications enable row level security;
+alter table public.ops_audit_logs enable row level security;
 
 create policy "profiles visible to signed in users" on public.profiles for select to authenticated using (true);
 create policy "members insert own profile" on public.profiles for insert to authenticated with check (auth.uid() = id);
@@ -264,6 +360,8 @@ create policy "workshops visible to signed in users" on public.workshops for sel
 create policy "admins manage workshops" on public.workshops for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
 create policy "members manage own workshop registrations" on public.workshop_registrations for all to authenticated using (auth.uid() = profile_id or public.is_admin()) with check (auth.uid() = profile_id or public.is_admin());
+
+create policy "members manage own waitlist entries" on public.workshop_waitlist for all to authenticated using (auth.uid() = profile_id or public.is_admin()) with check (auth.uid() = profile_id or public.is_admin());
 
 create policy "admins manage check ins" on public.check_ins for all to authenticated using (public.is_admin()) with check (public.is_admin());
 create policy "members read own check ins" on public.check_ins for select to authenticated using (auth.uid() = profile_id);
@@ -283,12 +381,20 @@ create policy "announcements visible to signed in users" on public.announcements
 create policy "admins send announcements" on public.announcements for insert to authenticated with check (public.is_admin());
 
 create policy "members read own certificates or admins read all" on public.certificates for select to authenticated using (auth.uid() = profile_id or public.is_admin());
+create policy "public certificate verification" on public.certificates for select to public using (status = 'Ready');
 create policy "admins issue certificates" on public.certificates for insert to authenticated with check (public.is_admin());
 create policy "admins update certificates" on public.certificates for update to authenticated using (public.is_admin()) with check (public.is_admin());
 
 create policy "delegates submit own performances" on public.performance_submissions for insert to authenticated with check (auth.uid() = profile_id);
 create policy "members read own performance submissions or admins read all" on public.performance_submissions for select to authenticated using (auth.uid() = profile_id or public.is_admin());
 create policy "admins update performance submissions" on public.performance_submissions for update to authenticated using (public.is_admin()) with check (public.is_admin());
+
+create policy "members read own delegate applications or admins read all" on public.delegate_applications for select to authenticated using (auth.uid() = profile_id or public.is_admin());
+create policy "members submit own delegate applications" on public.delegate_applications for insert to authenticated with check (auth.uid() = profile_id);
+create policy "members update draft applications or admins manage all" on public.delegate_applications for update to authenticated using ((auth.uid() = profile_id and status in ('draft', 'needs_info')) or public.is_admin()) with check ((auth.uid() = profile_id and status in ('draft', 'submitted')) or public.is_admin());
+
+create policy "admins read audit logs" on public.ops_audit_logs for select to authenticated using (public.is_admin());
+create policy "admins insert audit logs" on public.ops_audit_logs for insert to authenticated with check (public.is_admin());
 
 insert into storage.buckets (id, name, public)
 values ('photo-wall', 'photo-wall', true)

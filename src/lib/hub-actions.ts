@@ -93,6 +93,12 @@ export async function registerWorkshop(supabase: SupabaseClient, workshopId: str
   return data;
 }
 
+export async function joinWorkshopWaitlist(supabase: SupabaseClient, workshopId: string) {
+  const { data, error } = await supabase.rpc("join_workshop_waitlist", { p_workshop_id: workshopId });
+  if (error) throw error;
+  return data;
+}
+
 export async function cancelWorkshopRegistration(supabase: SupabaseClient, workshopId: string, profileId: string) {
   const { error } = await supabase.from("workshop_registrations").delete().eq("workshop_id", workshopId).eq("profile_id", profileId);
   if (error) throw error;
@@ -147,6 +153,22 @@ export async function issueCertificate(supabase: SupabaseClient, input: { profil
 
 export async function approveDelegate(supabase: SupabaseClient, profileId: string, delegateId: string) {
   const { data, error } = await supabase.from("profiles").update({ role: "delegate", delegate_id: delegateId, delegate_approved_at: new Date().toISOString() }).eq("id", profileId).select().single<HubProfile>();
+  if (error) throw error;
+  return data;
+}
+
+export async function submitDelegateApplication(supabase: SupabaseClient, profileId: string, notes?: string) {
+  const { data, error } = await supabase
+    .from("delegate_applications")
+    .upsert({ profile_id: profileId, status: "submitted", notes, updated_at: new Date().toISOString() }, { onConflict: "profile_id" })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function approveDelegateApplication(supabase: SupabaseClient, profileId: string, delegateId: string) {
+  const { data, error } = await supabase.rpc("approve_delegate_application", { p_profile_id: profileId, p_delegate_id: delegateId });
   if (error) throw error;
   return data;
 }

@@ -45,6 +45,7 @@ import {
   exportMembersCsv,
   getCurrentProfile,
   issueCertificate,
+  joinWorkshopWaitlist,
   markWorkshopAttendance,
   moderatePhoto,
   recordQrCheckIn,
@@ -52,6 +53,7 @@ import {
   registerWorkshop,
   saveProfile,
   sendAnnouncement,
+  submitDelegateApplication as submitDelegateApplicationRecord,
   upsertProfile,
   uploadPhotoPost,
 } from "@/lib/hub-actions";
@@ -79,6 +81,7 @@ type ProfileState = {
   socials: string;
   visibility: string;
 };
+type DelegateApplicationStatus = "not_started" | "draft" | "submitted" | "approved";
 
 const tabs: { id: Tab; label: string; icon: typeof Home }[] = [
   { id: "home", label: "Today", icon: Home },
@@ -161,6 +164,9 @@ export function MemberHubApp() {
   const [actionNotice, setActionNotice] = useState("Demo mode: Supabase actions will run when env vars are configured.");
   const [profileNotice, setProfileNotice] = useState("");
   const [selectedRole, setSelectedRole] = useState<UserRole>("delegate");
+  const [delegateApplicationStatus, setDelegateApplicationStatus] = useState<DelegateApplicationStatus>("not_started");
+  const [joinedWorkshops, setJoinedWorkshops] = useState<string[]>([workshops[0].id]);
+  const [waitlistWorkshops, setWaitlistWorkshops] = useState<string[]>([]);
   const [photoPosts, setPhotoPosts] = useState<PhotoPost[]>(() => {
     if (typeof window === "undefined") {
       return samplePhotoPosts;
@@ -312,6 +318,25 @@ export function MemberHubApp() {
     setActiveTab("home");
   }
 
+  async function submitDelegateApplication() {
+    const supabase = getSupabaseBrowserClient();
+    if (supabase && member && isUuid(member.id)) {
+      try {
+        await submitDelegateApplicationRecord(supabase, member.id, "Applied from BICC Member Hub.");
+      } catch (error) {
+        setActionNotice(error instanceof Error ? error.message : "Delegate application could not be saved.");
+      }
+    }
+    setDelegateApplicationStatus("submitted");
+    setActionNotice("Delegate application submitted. Organizer review is next.");
+  }
+
+  function approveDemoDelegateApplication() {
+    setDelegateApplicationStatus("approved");
+    setSelectedRole("delegate");
+    setActionNotice("Delegate application approved. Digital pass unlocked.");
+  }
+
   async function createAccount() {
     const supabase = getSupabaseBrowserClient();
     if (supabase && email && password) {
@@ -448,16 +473,41 @@ export function MemberHubApp() {
   async function runWorkshopRegistration(workshopId: string) {
     const supabase = getSupabaseBrowserClient();
     if (!supabase || !member || !isUuid(member.id)) {
-      setActionNotice("Class registration demo only. Configure Supabase to register seats.");
+      joinWorkshopDemo(workshopId);
       return;
     }
 
     try {
       await registerWorkshop(supabase, workshopId, member.id);
+      setJoinedWorkshops((items) => (items.includes(workshopId) ? items : [...items, workshopId]));
+      setWaitlistWorkshops((items) => items.filter((item) => item !== workshopId));
       setActionNotice("Class registration saved in Supabase.");
     } catch (error) {
       setActionNotice(error instanceof Error ? error.message : "Class registration failed.");
     }
+  }
+
+  function joinWorkshopDemo(workshopId: string) {
+    setJoinedWorkshops((items) => (items.includes(workshopId) ? items : [...items, workshopId]));
+    setWaitlistWorkshops((items) => items.filter((item) => item !== workshopId));
+    setActionNotice("Workshop added to My Schedule.");
+  }
+
+  function joinWaitlistDemo(workshopId: string) {
+    setWaitlistWorkshops((items) => (items.includes(workshopId) ? items : [...items, workshopId]));
+    setActionNotice("Added to workshop waitlist.");
+  }
+
+  async function joinWorkshopWaitlistFlow(workshopId: string) {
+    const supabase = getSupabaseBrowserClient();
+    if (supabase && member && isUuid(member.id)) {
+      try {
+        await joinWorkshopWaitlist(supabase, workshopId);
+      } catch (error) {
+        setActionNotice(error instanceof Error ? error.message : "Waitlist could not be saved.");
+      }
+    }
+    joinWaitlistDemo(workshopId);
   }
 
   async function saveMemberProfile() {
@@ -528,10 +578,22 @@ export function MemberHubApp() {
                 actionNotice={actionNotice}
                 runOrganizerAction={runOrganizerAction}
                 runQrCheckIn={runQrCheckIn}
+                applicationStatus={delegateApplicationStatus}
+                onApplyDelegate={submitDelegateApplication}
+                onApproveDelegate={approveDemoDelegateApplication}
+                joinedWorkshops={joinedWorkshops}
               />
             )}
             {activeTab === "pass" && <PassTab member={member} />}
-            {activeTab === "workshops" && <WorkshopsTab member={member} onRegister={runWorkshopRegistration} />}
+            {activeTab === "workshops" && (
+              <WorkshopsTab
+                member={member}
+                joinedWorkshops={joinedWorkshops}
+                waitlistWorkshops={waitlistWorkshops}
+                onRegister={runWorkshopRegistration}
+                onWaitlist={joinWorkshopWaitlistFlow}
+              />
+            )}
             {activeTab === "network" && <NetworkTab member={member} photoPosts={photoPosts} onAddPhoto={addPhotoPost} />}
             {activeTab === "profile" && (
               <ProfileTab
@@ -542,6 +604,7 @@ export function MemberHubApp() {
                 setSelectedRole={setSelectedRole}
                 profileNotice={profileNotice}
                 onSaveProfile={saveMemberProfile}
+                joinedWorkshops={joinedWorkshops}
                 logout={() => {
                   setCurrentMember(null);
                   setAuthScreen("splash");
@@ -755,6 +818,10 @@ function HomeTab({
   actionNotice,
   runOrganizerAction,
   runQrCheckIn,
+  applicationStatus,
+  onApplyDelegate,
+  onApproveDelegate,
+  joinedWorkshops,
 }: {
   member: Member;
   setActiveTab: (tab: Tab) => void;
@@ -763,9 +830,13 @@ function HomeTab({
   actionNotice: string;
   runOrganizerAction: (action: string) => void;
   runQrCheckIn: (delegateId: string) => void;
+  applicationStatus: DelegateApplicationStatus;
+  onApplyDelegate: () => void;
+  onApproveDelegate: () => void;
+  joinedWorkshops: string[];
 }) {
   if (member.role === "admin") {
-    return <AdminDashboard actionNotice={actionNotice} runOrganizerAction={runOrganizerAction} runQrCheckIn={runQrCheckIn} />;
+    return <AdminDashboard actionNotice={actionNotice} runOrganizerAction={runOrganizerAction} runQrCheckIn={runQrCheckIn} applicationStatus={applicationStatus} onApproveDelegate={onApproveDelegate} />;
   }
 
   const delegate = hasDelegateAccess(member.role);
@@ -774,7 +845,7 @@ function HomeTab({
     <div className="space-y-4">
       <TodayHero member={member} delegate={delegate} setActiveTab={setActiveTab} />
       <TodayMission member={member} delegate={delegate} setActiveTab={setActiveTab} />
-      {delegate ? <NextWorkshopCard setActiveTab={setActiveTab} /> : <UnlockDelegatePanel />}
+      {delegate ? <NextWorkshopCard setActiveTab={setActiveTab} joinedWorkshops={joinedWorkshops} /> : <DelegateApplicationPanel status={applicationStatus} onApply={onApplyDelegate} />}
       <PhotoWall member={member} posts={photoPosts} onAddPhoto={onAddPhoto} compact />
       <CompactActions delegate={delegate} setActiveTab={setActiveTab} />
       <AnnouncementStrip delegate={delegate} />
@@ -804,8 +875,8 @@ function TodayHero({ member, delegate, setActiveTab }: { member: Member; delegat
   );
 }
 
-function NextWorkshopCard({ setActiveTab }: { setActiveTab: (tab: Tab) => void }) {
-  const nextWorkshop = workshops[0];
+function NextWorkshopCard({ setActiveTab, joinedWorkshops }: { setActiveTab: (tab: Tab) => void; joinedWorkshops: string[] }) {
+  const nextWorkshop = workshops.find((workshop) => joinedWorkshops.includes(workshop.id)) || workshops[0];
 
   return (
     <section className="game-card p-4">
@@ -822,13 +893,40 @@ function NextWorkshopCard({ setActiveTab }: { setActiveTab: (tab: Tab) => void }
   );
 }
 
-function UnlockDelegatePanel() {
+function DelegateApplicationPanel({ status, onApply }: { status: DelegateApplicationStatus; onApply: () => void }) {
+  const steps = [
+    { title: "Profile", done: true },
+    { title: "Apply", done: status !== "not_started" && status !== "draft" },
+    { title: "Approval", done: status === "approved" },
+  ];
+  const statusLabel: Record<DelegateApplicationStatus, string> = {
+    not_started: "Ready to apply",
+    draft: "Draft",
+    submitted: "Under review",
+    approved: "Approved",
+  };
+
   return (
     <section className="game-card bg-gradient-to-br from-[#FFE26A] to-white p-4">
-      <p className="badge-dark w-fit">Delegate access</p>
-      <h3 className="mt-3 text-2xl font-black leading-tight text-[#0B2A5B]">Unlock the full BICC pocket pass.</h3>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="badge-dark w-fit">Delegate application</p>
+          <h3 className="mt-3 text-2xl font-black leading-tight text-[#0B2A5B]">Unlock the full BICC pocket pass.</h3>
+        </div>
+        <span className="badge-mint shrink-0">{statusLabel[status]}</span>
+      </div>
       <p className="mt-2 text-sm font-bold leading-5 text-[#0B2A5B]/65">QR pass, class booking, performer directory, certificates and photo memories.</p>
-      <button className="primary-button mt-4">Become BICC Delegate</button>
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        {steps.map((step) => (
+          <div className="rounded-[18px] border-[2px] border-[#0B2A5B] bg-white p-2 text-center" key={step.title}>
+            <CheckCircle2 className={`mx-auto h-5 w-5 ${step.done ? "text-[#7FE6C3]" : "text-[#0B2A5B]/25"}`} strokeWidth={3} />
+            <p className="mt-1 text-[10px] font-black text-[#0B2A5B]">{step.title}</p>
+          </div>
+        ))}
+      </div>
+      <button className="primary-button mt-4" onClick={onApply} disabled={status === "submitted" || status === "approved"}>
+        <UserPlus className="h-5 w-5" /> {status === "submitted" ? "Application Sent" : status === "approved" ? "Delegate Approved" : "Become BICC Delegate"}
+      </button>
     </section>
   );
 }
@@ -917,6 +1015,8 @@ function PhotoWall({
   compact?: boolean;
 }) {
   const [caption, setCaption] = useState("");
+  const [album, setAlbum] = useState("Day 1");
+  const albums = ["Day 1", "Workshops", "Gala", "Outreach"];
 
   function handleFile(fileList: FileList | null) {
     const file = fileList?.[0];
@@ -946,18 +1046,38 @@ function PhotoWall({
       </div>
 
       {!compact && (
-        <div className="m-4 rounded-[24px] border-[3px] border-[#0B2A5B] bg-[#FFF8E8] p-3">
-          <input
-            className="h-12 w-full rounded-[18px] border-[2px] border-[#0B2A5B] bg-white px-4 text-sm font-black text-[#0B2A5B] outline-none"
-            placeholder={`${member.name}'s signature`}
-            value={caption}
-            onChange={(event) => setCaption(event.target.value)}
-          />
-          <label className="primary-button mt-3">
-            <Camera className="h-5 w-5" /> Take / Upload Group Photo
-            <input className="hidden" type="file" accept="image/*" capture="environment" onChange={(event) => handleFile(event.target.files)} />
-          </label>
-        </div>
+        <>
+          <div className="flex gap-2 overflow-x-auto px-4 pt-4">
+            {albums.map((item) => (
+              <button className={album === item ? "badge-dark shrink-0" : "skill-badge shrink-0 bg-white"} key={item} onClick={() => setAlbum(item)}>
+                {item}
+              </button>
+            ))}
+          </div>
+          {member.role === "admin" && (
+            <div className="mx-4 mt-3 rounded-[22px] border-[2px] border-[#0B2A5B] bg-[#FFE26A] p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.08em] text-[#0B2A5B]/55">Moderation</p>
+                  <p className="text-sm font-black text-[#0B2A5B]">3 memories waiting for review</p>
+                </div>
+                <button className="mini-button">Review</button>
+              </div>
+            </div>
+          )}
+          <div className="m-4 rounded-[24px] border-[3px] border-[#0B2A5B] bg-[#FFF8E8] p-3">
+            <input
+              className="h-12 w-full rounded-[18px] border-[2px] border-[#0B2A5B] bg-white px-4 text-sm font-black text-[#0B2A5B] outline-none"
+              placeholder={`${member.name}'s signature`}
+              value={caption}
+              onChange={(event) => setCaption(event.target.value)}
+            />
+            <label className="primary-button mt-3">
+              <Camera className="h-5 w-5" /> Add to {album}
+              <input className="hidden" type="file" accept="image/*" capture="environment" onChange={(event) => handleFile(event.target.files)} />
+            </label>
+          </div>
+        </>
       )}
 
       <div className={`${compact ? "flex gap-3 overflow-x-auto px-4 py-4" : "grid grid-cols-2 gap-3 px-4 pb-4"}`}>
@@ -1142,21 +1262,81 @@ function QrModal({ member, qr, close }: { member: Member; qr: string; close: () 
   );
 }
 
-function WorkshopsTab({ member, onRegister }: { member: Member; onRegister: (workshopId: string) => void }) {
+function WorkshopsTab({
+  member,
+  joinedWorkshops,
+  waitlistWorkshops,
+  onRegister,
+  onWaitlist,
+}: {
+  member: Member;
+  joinedWorkshops: string[];
+  waitlistWorkshops: string[];
+  onRegister: (workshopId: string) => void;
+  onWaitlist: (workshopId: string) => void;
+}) {
   const delegate = hasDelegateAccess(member.role);
+  const joined = workshops.filter((workshop) => joinedWorkshops.includes(workshop.id));
 
   return (
     <div className="space-y-4">
       <SectionHeader label="Classes" title={delegate ? "My Learning Path" : "Preview Classes"} />
+      {delegate && <MySchedulePanel joined={joined} />}
       {workshops.map((workshop) => (
-        <WorkshopCard key={workshop.id} workshop={workshop} delegate={delegate} onRegister={onRegister} />
+        <WorkshopCard
+          key={workshop.id}
+          workshop={workshop}
+          delegate={delegate}
+          joined={joinedWorkshops.includes(workshop.id)}
+          waitlisted={waitlistWorkshops.includes(workshop.id)}
+          onRegister={onRegister}
+          onWaitlist={onWaitlist}
+        />
       ))}
     </div>
   );
 }
 
-function WorkshopCard({ workshop, delegate, onRegister }: { workshop: Workshop; delegate: boolean; onRegister: (workshopId: string) => void }) {
+function MySchedulePanel({ joined }: { joined: Workshop[] }) {
+  return (
+    <section className="game-card p-4">
+      <SectionHeader label="Schedule" title="My Classes" compact />
+      <div className="mt-4 space-y-3">
+        {(joined.length ? joined : [workshops[0]]).map((workshop) => (
+          <div className="flex items-center gap-3 rounded-[20px] bg-[#FFF8E8] p-3" key={workshop.id}>
+            <div className="grid h-11 w-11 place-items-center rounded-[16px] border-[2px] border-[#0B2A5B] bg-[#7DD3FC]">
+              <Clock className="h-5 w-5 text-[#0B2A5B]" strokeWidth={3} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="truncate text-sm font-black text-[#0B2A5B]">{workshop.title}</h3>
+              <p className="text-xs font-bold text-[#0B2A5B]/60">{workshop.time} · {workshop.room}</p>
+            </div>
+            <span className="badge-mint">Joined</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function WorkshopCard({
+  workshop,
+  delegate,
+  joined,
+  waitlisted,
+  onRegister,
+  onWaitlist,
+}: {
+  workshop: Workshop;
+  delegate: boolean;
+  joined: boolean;
+  waitlisted: boolean;
+  onRegister: (workshopId: string) => void;
+  onWaitlist: (workshopId: string) => void;
+}) {
   const mentor = members.find((item) => item.id === workshop.mentorId);
+  const seatsLeft = workshop.capacity - workshop.registered;
+  const nearlyFull = seatsLeft <= 3;
 
   return (
     <section className="game-card p-4">
@@ -1178,11 +1358,20 @@ function WorkshopCard({ workshop, delegate, onRegister }: { workshop: Workshop; 
       </div>
       <div className="mt-4 flex items-center justify-between rounded-[20px] bg-[#FFF8E8] px-4 py-3 text-xs font-black text-[#0B2A5B]">
         <span>{workshop.time}</span>
-        <span>{workshop.capacity - workshop.registered} seats left</span>
+        <span>{joined ? "In my schedule" : waitlisted ? "Waitlisted" : `${seatsLeft} seats left`}</span>
       </div>
-      <button className={delegate ? "primary-button mt-4" : "secondary-button mt-4 w-full"} onClick={() => delegate && onRegister(workshop.id)}>
-        {delegate ? "Register Workshop" : "Delegate Access Required"}
-      </button>
+      {delegate ? (
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <button className={joined ? "secondary-button w-full" : "primary-button"} onClick={() => onRegister(workshop.id)} disabled={joined}>
+            <CalendarCheck className="h-5 w-5" /> {joined ? "Joined" : "Register"}
+          </button>
+          <button className="secondary-button w-full" onClick={() => onWaitlist(workshop.id)} disabled={joined || waitlisted}>
+            <Clock className="h-5 w-5" /> {waitlisted ? "Waitlisted" : nearlyFull ? "Waitlist" : "Hold Seat"}
+          </button>
+        </div>
+      ) : (
+        <button className="secondary-button mt-4 w-full">Delegate Access Required</button>
+      )}
     </section>
   );
 }
@@ -1253,6 +1442,7 @@ function ProfileTab(props: {
   setSelectedRole: (role: UserRole) => void;
   profileNotice: string;
   onSaveProfile: () => void;
+  joinedWorkshops: string[];
   logout: () => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -1276,10 +1466,12 @@ function ProfileTab(props: {
         <div className="mt-4 grid grid-cols-2 gap-3">
           <QuickCard icon={Trophy} title="My Badges" body="3 earned" />
           <QuickCard icon={Award} title="Certificates" body={`${certificates.length} items`} />
-          <QuickCard icon={CalendarCheck} title="My Workshops" body="3 joined" />
+          <QuickCard icon={CalendarCheck} title="My Workshops" body={`${props.joinedWorkshops.length} joined`} />
           <QuickCard icon={Settings} title="Settings" body="Manage" />
         </div>
       </section>
+
+      <CertificateWallet member={props.member} />
 
       <button className="primary-button" onClick={() => setEditing((value) => !value)}>
         <CircleUserRound className="h-5 w-5" /> {editing ? "Done Editing" : "Edit Profile"}
@@ -1330,6 +1522,34 @@ function ProfileTab(props: {
   );
 }
 
+function CertificateWallet({ member }: { member: Member }) {
+  return (
+    <section className="game-card p-4">
+      <SectionHeader label="Post-event" title="Certificate Wallet" compact />
+      <div className="mt-4 space-y-3">
+        {certificates.map((certificate, index) => (
+          <div className="rounded-[22px] border-[2px] border-[#0B2A5B] bg-[#FFF8E8] p-3" key={certificate.id}>
+            <div className="flex items-start gap-3">
+              <div className="grid h-11 w-11 place-items-center rounded-[16px] border-[2px] border-[#0B2A5B] bg-[#FFE26A]">
+                <Award className="h-5 w-5 text-[#0B2A5B]" strokeWidth={3} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-sm font-black leading-tight text-[#0B2A5B]">{certificate.title}</h3>
+                <p className="mt-1 text-xs font-bold text-[#0B2A5B]/60">{certificate.status} · {certificate.issuedDate}</p>
+                <p className="mt-2 rounded-[14px] bg-white px-2 py-1 text-[10px] font-black text-[#0B2A5B]">Verify: BICC26-CERT-{index + 1}{member.delegateId?.slice(-4) || "0000"}</p>
+              </div>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button className="mini-button">Verify</button>
+              <button className="mini-button">Share</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function ClownPassport({ member, profile }: { member: Member; profile: ProfileState }) {
   const skillList = profile.skills.split(",").map((skill) => skill.trim()).filter(Boolean).slice(0, 4);
 
@@ -1376,10 +1596,14 @@ function AdminDashboard({
   actionNotice,
   runOrganizerAction,
   runQrCheckIn,
+  applicationStatus,
+  onApproveDelegate,
 }: {
   actionNotice: string;
   runOrganizerAction: (action: string) => void;
   runQrCheckIn: (delegateId: string) => void;
+  applicationStatus: DelegateApplicationStatus;
+  onApproveDelegate: () => void;
 }) {
   const [scannerOpen, setScannerOpen] = useState(false);
   const organizerStages = [
@@ -1418,6 +1642,8 @@ function AdminDashboard({
       </section>
 
       <section className="game-card p-3 text-xs font-black text-[#0B2A5B]">{actionNotice}</section>
+
+      <MemberOpsPanel applicationStatus={applicationStatus} onApproveDelegate={onApproveDelegate} runOrganizerAction={runOrganizerAction} />
 
       <section className="grid grid-cols-3 gap-2">
         {organizerStages.map((stage) => (
@@ -1486,6 +1712,52 @@ function AdminDashboard({
       </section>
       {scannerOpen && <QrScannerModal close={() => setScannerOpen(false)} onCheckIn={runQrCheckIn} />}
     </div>
+  );
+}
+
+function MemberOpsPanel({
+  applicationStatus,
+  onApproveDelegate,
+  runOrganizerAction,
+}: {
+  applicationStatus: DelegateApplicationStatus;
+  onApproveDelegate: () => void;
+  runOrganizerAction: (action: string) => void;
+}) {
+  const queues = [
+    { label: "Pending", value: applicationStatus === "submitted" ? "13" : "12", tone: "bg-[#FFE26A]" },
+    { label: "Missing info", value: "7", tone: "bg-[#7DD3FC]" },
+    { label: "No-show risk", value: "4", tone: "bg-[#FF5A4F] text-white" },
+  ];
+
+  return (
+    <section className="game-card p-4">
+      <SectionHeader label="Members" title="Delegate Review" compact />
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        {queues.map((queue) => (
+          <div className={`rounded-[18px] border-[2px] border-[#0B2A5B] p-2 text-center shadow-[0_3px_0_#0B2A5B] ${queue.tone}`} key={queue.label}>
+            <p className="text-xl font-black">{queue.value}</p>
+            <p className="text-[9px] font-black uppercase tracking-[0.05em]">{queue.label}</p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 rounded-[22px] border-[2px] border-[#0B2A5B] bg-[#FFF8E8] p-3">
+        <div className="flex items-start gap-3">
+          <Avatar member={members[3]} />
+          <div className="min-w-0 flex-1">
+            <p className="badge-yellow w-fit">{applicationStatus === "submitted" ? "New application" : "Next applicant"}</p>
+            <h3 className="mt-2 text-base font-black text-[#0B2A5B]">Datu Amir</h3>
+            <p className="text-xs font-bold text-[#0B2A5B]/60">Malaysia · Juggling · Profile 82%</p>
+          </div>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button className="primary-button min-h-12" onClick={onApproveDelegate}>
+            <CheckCircle2 className="h-5 w-5" /> Approve
+          </button>
+          <button className="secondary-button min-h-12" onClick={() => runOrganizerAction("Member Export")}>Export</button>
+        </div>
+      </div>
+    </section>
   );
 }
 
