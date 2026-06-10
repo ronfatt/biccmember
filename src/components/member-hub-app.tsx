@@ -156,6 +156,14 @@ function hasDelegateAccess(role: UserRole) {
   return delegateRoles.includes(role);
 }
 
+function getAuthRedirectUrl() {
+  if (typeof window !== "undefined") {
+    return window.location.origin;
+  }
+
+  return "https://member.bicc.my";
+}
+
 export function MemberHubApp() {
   const [authScreen, setAuthScreen] = useState<AuthScreen>("splash");
   const [activeTab, setActiveTab] = useState<Tab>("home");
@@ -391,6 +399,7 @@ export function MemberHubApp() {
         email,
         password,
         options: {
+          emailRedirectTo: getAuthRedirectUrl(),
           data: {
             full_name: profile.realName || email.split("@")[0],
             stage_name: profile.stageName || email.split("@")[0],
@@ -416,10 +425,10 @@ export function MemberHubApp() {
           social_links: { instagram: profile.socials },
         });
       }
-      setNotice("Account request sent. Check email verification if Supabase is configured.");
       if (data.session) {
         await login("hub_member");
       } else {
+        setNotice("Account created. Email confirmation is still enabled in Supabase.");
         setAuthScreen("login");
       }
       return;
@@ -429,7 +438,7 @@ export function MemberHubApp() {
   async function forgotPassword() {
     const supabase = getSupabaseBrowserClient();
     if (supabase && email) {
-      await supabase.auth.resetPasswordForEmail(email);
+      await supabase.auth.resetPasswordForEmail(email, { redirectTo: getAuthRedirectUrl() });
       setNotice("Password reset email requested.");
       return;
     }
