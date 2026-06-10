@@ -626,27 +626,32 @@ function AuthFlow(props: {
 
   if (screen === "splash") {
     return (
-      <main className="app-surface relative flex h-full flex-col px-7 py-8">
+      <main className="app-surface relative flex h-full flex-col overflow-hidden px-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-[calc(2rem+env(safe-area-inset-top))]">
         <PatternLayer />
-        <section className="relative z-10 flex flex-1 flex-col items-center justify-center text-center">
-          <LogoMark large />
-          <p className="mt-9 badge-yellow">BICC 2026</p>
-          <h1 className="mt-4 text-5xl font-black leading-[0.95] text-[#0B2A5B]">BICC Member Hub</h1>
-          <p className="mt-5 max-w-[17rem] text-base font-extrabold leading-6 text-[#0B2A5B]/75">
+        <div className="pointer-events-none absolute left-1/2 top-[24%] h-72 w-72 -translate-x-1/2 rounded-full bg-gradient-to-br from-[#FFE26A]/45 via-white/70 to-[#7DD3FC]/35 blur-2xl" />
+        <section className="relative z-10 flex flex-1 flex-col items-center justify-center pb-16 text-center">
+          <div className="rounded-full bg-white/60 p-3 shadow-[0_18px_45px_rgba(11,42,91,0.12)]">
+            <LogoMark large />
+          </div>
+          <p className="mt-8 badge-yellow">BICC 2026</p>
+          <h1 className="mt-4 max-w-[18rem] text-[2.75rem] font-black leading-[0.98] text-[#0B2A5B]">BICC Member Hub</h1>
+          <p className="mt-5 max-w-[18.5rem] text-[1.02rem] font-extrabold leading-6 text-[#0B2A5B]/76">
             Free to join. BICC delegates unlock full access.
           </p>
         </section>
-        <section className="relative z-10 space-y-3 pb-3">
+        <section className="relative z-10 mx-auto w-full max-w-[22rem] space-y-3">
           <button className="primary-button" onClick={() => props.login("delegate")}>
             <LogIn className="h-5 w-5" /> Login
           </button>
-          <button className="secondary-button" onClick={props.createAccount}>
-            <UserPlus className="h-5 w-5" /> Create Free Account
-          </button>
-          <button className="mini-button w-full" onClick={() => props.login("admin")}>
-            <ShieldCheck className="h-4 w-4" /> Organizer Demo
-          </button>
-          <p className="text-center text-xs font-black uppercase tracking-[0.12em] text-[#0B2A5B]/55">Powered by Borneo Clown Hub</p>
+          <div className="grid grid-cols-2 gap-3">
+            <button className="secondary-button min-h-12 text-xs" onClick={props.createAccount}>
+              <UserPlus className="h-4 w-4" /> Free Account
+            </button>
+            <button className="secondary-button min-h-12 text-xs" onClick={() => props.login("admin")}>
+              <ShieldCheck className="h-4 w-4" /> Organizer
+            </button>
+          </div>
+          <p className="pt-1 text-center text-[0.7rem] font-black uppercase tracking-[0.14em] text-[#0B2A5B]/58">Powered by Borneo Clown Hub</p>
         </section>
       </main>
     );
