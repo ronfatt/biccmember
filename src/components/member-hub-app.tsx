@@ -56,6 +56,7 @@ import {
   submitDelegateApplication as submitDelegateApplicationRecord,
   upsertProfile,
   uploadPhotoPost,
+  type HubProfile,
 } from "@/lib/hub-actions";
 import type { Member, UserRole, Workshop } from "@/lib/types";
 
@@ -123,6 +124,7 @@ const collaborationStatus: Record<string, string> = {
 };
 
 const delegateRoles: UserRole[] = ["delegate", "verified_performer", "mentor", "admin"];
+const enableDevDemo = process.env.NODE_ENV !== "production";
 const samplePhotoPosts: PhotoPost[] = [
   {
     id: "photo-001",
@@ -158,10 +160,10 @@ export function MemberHubApp() {
   const [authScreen, setAuthScreen] = useState<AuthScreen>("splash");
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const [currentMember, setCurrentMember] = useState<Member | null>(null);
-  const [email, setEmail] = useState("delegate@bicc.test");
-  const [password, setPassword] = useState("bicchub2026");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [notice, setNotice] = useState("");
-  const [actionNotice, setActionNotice] = useState("Demo mode: Supabase actions will run when env vars are configured.");
+  const [actionNotice, setActionNotice] = useState("Live testing mode: actions save to Supabase when your role allows it.");
   const [profileNotice, setProfileNotice] = useState("");
   const [selectedRole, setSelectedRole] = useState<UserRole>("delegate");
   const [delegateApplicationStatus, setDelegateApplicationStatus] = useState<DelegateApplicationStatus>("not_started");
@@ -218,39 +220,71 @@ export function MemberHubApp() {
     };
   }, [currentMember, profile, selectedRole]);
 
+  function applyLiveProfile(liveProfile: HubProfile) {
+    const liveMember = {
+      id: liveProfile.id,
+      name: liveProfile.stage_name || liveProfile.full_name,
+      role: liveProfile.role,
+      city: liveProfile.city || "",
+      country: liveProfile.country || "",
+      specialty: liveProfile.specialty || "Performer",
+      avatar: (liveProfile.stage_name || liveProfile.full_name).slice(0, 2).toUpperCase(),
+      delegateId: liveProfile.delegate_id || undefined,
+      bio: liveProfile.bio || "",
+    };
+    setCurrentMember(liveMember);
+    setSelectedRole(liveProfile.role);
+    setProfile({
+      stageName: liveMember.name,
+      realName: liveProfile.full_name,
+      country: liveMember.country,
+      city: liveMember.city,
+      category: liveMember.specialty,
+      skills: liveProfile.skills?.join(", ") || "",
+      bio: liveMember.bio,
+      socials: liveProfile.social_links?.instagram || "",
+      visibility: liveProfile.visibility || "Delegates only",
+    });
+    setActiveTab("home");
+  }
+
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (!data.session) return;
+      try {
+        const liveProfile = await getCurrentProfile(supabase);
+        if (liveProfile) {
+          applyLiveProfile(liveProfile);
+          setActionNotice("Signed in with your live Supabase session.");
+        }
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "Could not load your profile.");
+      }
+    });
+  }, []);
+
   async function login(role: UserRole = "hub_member") {
     const supabase = getSupabaseBrowserClient();
+
+    if (!supabase) {
+      setNotice("Supabase is not configured for this build.");
+      return;
+    }
+
+    if (!email || !password) {
+      setNotice("Please enter your email and password.");
+      return;
+    }
 
     if (supabase && email && password) {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (!error) {
         const liveProfile = await getCurrentProfile(supabase);
         if (liveProfile) {
-          const liveMember = {
-            id: liveProfile.id,
-            name: liveProfile.stage_name || liveProfile.full_name,
-            role: liveProfile.role,
-            city: liveProfile.city || "",
-            country: liveProfile.country || "",
-            specialty: liveProfile.specialty || "Performer",
-            avatar: (liveProfile.stage_name || liveProfile.full_name).slice(0, 2).toUpperCase(),
-            delegateId: liveProfile.delegate_id || undefined,
-            bio: liveProfile.bio || "",
-          };
-          setCurrentMember(liveMember);
-          setSelectedRole(liveProfile.role);
-          setProfile({
-            stageName: liveMember.name,
-            realName: liveProfile.full_name,
-            country: liveMember.country,
-            city: liveMember.city,
-            category: liveMember.specialty,
-            skills: liveProfile.skills?.join(", ") || "Comedy, Movement",
-            bio: liveMember.bio,
-            socials: liveProfile.social_links?.instagram || "",
-            visibility: liveProfile.visibility || "Delegates only",
-          });
-          setActiveTab("home");
+          applyLiveProfile(liveProfile);
           setActionNotice("Live Supabase profile loaded.");
           return;
         }
@@ -291,8 +325,11 @@ export function MemberHubApp() {
           return;
         }
       }
-      setNotice("Sample mode active. Add Supabase credentials and profiles to enable live auth.");
+      setNotice(error?.message || "Login could not load a member profile.");
+      return;
     }
+
+    if (!enableDevDemo) return;
 
     const sampleMember =
       role === "admin"
@@ -339,6 +376,16 @@ export function MemberHubApp() {
 
   async function createAccount() {
     const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setNotice("Supabase is not configured for this build.");
+      return;
+    }
+
+    if (!email || !password) {
+      setNotice("Please enter an email and password to create your account.");
+      return;
+    }
+
     if (supabase && email && password) {
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -370,8 +417,13 @@ export function MemberHubApp() {
         });
       }
       setNotice("Account request sent. Check email verification if Supabase is configured.");
+      if (data.session) {
+        await login("hub_member");
+      } else {
+        setAuthScreen("login");
+      }
+      return;
     }
-    await login("hub_member");
   }
 
   async function forgotPassword() {
@@ -406,8 +458,14 @@ export function MemberHubApp() {
         setActionNotice("Photo uploaded to Supabase Storage.");
         return;
       } catch (error) {
-        setActionNotice(error instanceof Error ? error.message : "Photo upload failed; using demo preview.");
+        setActionNotice(error instanceof Error ? error.message : "Photo upload failed.");
+        return;
       }
+    }
+
+    if (!enableDevDemo) {
+      setActionNotice("Photo upload needs a live Supabase member session.");
+      return;
     }
 
     const reader = new FileReader();
@@ -432,7 +490,7 @@ export function MemberHubApp() {
   async function runOrganizerAction(action: string) {
     const supabase = getSupabaseBrowserClient();
     if (!supabase || !member || !isUuid(member.id)) {
-      setActionNotice(`${action}: demo preview only. Configure Supabase env vars to run this action.`);
+      setActionNotice(`${action}: sign in with an organizer account to run this live action.`);
       return;
     }
 
@@ -457,7 +515,7 @@ export function MemberHubApp() {
   async function runQrCheckIn(delegateId: string) {
     const supabase = getSupabaseBrowserClient();
     if (!supabase || !member || !isUuid(member.id)) {
-      setActionNotice(`QR Check-in demo: ${delegateId || "no pass"} scanned.`);
+      setActionNotice("QR Check-in needs a live organizer session.");
       return;
     }
 
@@ -473,7 +531,8 @@ export function MemberHubApp() {
   async function runWorkshopRegistration(workshopId: string) {
     const supabase = getSupabaseBrowserClient();
     if (!supabase || !member || !isUuid(member.id)) {
-      joinWorkshopDemo(workshopId);
+      if (enableDevDemo) joinWorkshopDemo(workshopId);
+      else setActionNotice("Workshop registration needs a live Supabase member session.");
       return;
     }
 
@@ -515,7 +574,7 @@ export function MemberHubApp() {
 
     const supabase = getSupabaseBrowserClient();
     if (!supabase || !isUuid(member.id)) {
-      setProfileNotice("Profile saved locally for demo. Configure Supabase to persist it.");
+      setProfileNotice("Profile save needs a live Supabase member session.");
       return;
     }
 
@@ -547,6 +606,15 @@ export function MemberHubApp() {
     } catch (error) {
       setProfileNotice(error instanceof Error ? error.message : "Profile save failed.");
     }
+  }
+
+  async function logout() {
+    const supabase = getSupabaseBrowserClient();
+    await supabase?.auth.signOut();
+    setCurrentMember(null);
+    setAuthScreen("splash");
+    setNotice("");
+    setPassword("");
   }
 
   return (
@@ -605,11 +673,7 @@ export function MemberHubApp() {
                 profileNotice={profileNotice}
                 onSaveProfile={saveMemberProfile}
                 joinedWorkshops={joinedWorkshops}
-                logout={() => {
-                  setCurrentMember(null);
-                  setAuthScreen("splash");
-                  setNotice("");
-                }}
+                logout={logout}
               />
             )}
           </section>
@@ -706,17 +770,12 @@ function AuthFlow(props: {
           </p>
         </section>
         <section className="relative z-10 mx-auto w-full max-w-[22rem] space-y-3">
-          <button className="primary-button" onClick={() => props.login("delegate")}>
-            <LogIn className="h-5 w-5" /> Login
+            <button className="primary-button" onClick={() => setScreen("login")}>
+              <LogIn className="h-5 w-5" /> Login
+            </button>
+          <button className="secondary-button min-h-12 border-[2px] shadow-[0_3px_0_#0B2A5B] text-xs" onClick={() => setScreen("create")}>
+            <UserPlus className="h-4 w-4" /> Create Free Account
           </button>
-          <div className="grid grid-cols-2 gap-3">
-            <button className="secondary-button min-h-12 border-[2px] shadow-[0_3px_0_#0B2A5B] text-xs" onClick={props.createAccount}>
-              <UserPlus className="h-4 w-4" /> Free Account
-            </button>
-            <button className="secondary-button min-h-12 border-[2px] shadow-[0_3px_0_#0B2A5B] text-xs" onClick={() => props.login("admin")}>
-              <ShieldCheck className="h-4 w-4" /> Organizer
-            </button>
-          </div>
           <p className="pt-1 text-center text-[0.7rem] font-black uppercase tracking-[0.14em] text-[#0B2A5B]/58">Powered by Borneo Clown Hub</p>
         </section>
       </main>
@@ -747,10 +806,12 @@ function AuthFlow(props: {
             <button className="primary-button" onClick={() => props.login("delegate")}>
               <LogIn className="h-5 w-5" /> Login
             </button>
-            <div className="grid grid-cols-2 gap-3">
-              <button className="mini-button" onClick={() => props.login("hub_member")}>Member Demo</button>
-              <button className="mini-button" onClick={() => props.login("admin")}>Admin Demo</button>
-            </div>
+            {enableDevDemo && (
+              <div className="grid grid-cols-2 gap-3">
+                <button className="mini-button" onClick={() => props.login("hub_member")}>Member Demo</button>
+                <button className="mini-button" onClick={() => props.login("admin")}>Admin Demo</button>
+              </div>
+            )}
             <button className="text-button" onClick={() => setScreen("forgot")}>Forgot password</button>
           </>
         )}
@@ -1505,18 +1566,20 @@ function ProfileTab(props: {
         </section>
       )}
 
-      <section className="game-card p-4">
-        <SectionHeader label="Demo" title="Sample Role" compact />
-        <select
-          className="mt-3 h-12 w-full rounded-[18px] border-[2px] border-[#0B2A5B] bg-[#FFF8E8] px-4 text-sm font-black text-[#0B2A5B] outline-none"
-          value={props.selectedRole}
-          onChange={(event) => props.setSelectedRole(event.target.value as UserRole)}
-        >
-          {(["hub_member", "delegate", "verified_performer", "mentor", "admin"] as UserRole[]).map((role) => (
-            <option key={role} value={role}>{roleLabels[role]}</option>
-          ))}
-        </select>
-      </section>
+      {enableDevDemo && (
+        <section className="game-card p-4">
+          <SectionHeader label="Dev" title="Sample Role" compact />
+          <select
+            className="mt-3 h-12 w-full rounded-[18px] border-[2px] border-[#0B2A5B] bg-[#FFF8E8] px-4 text-sm font-black text-[#0B2A5B] outline-none"
+            value={props.selectedRole}
+            onChange={(event) => props.setSelectedRole(event.target.value as UserRole)}
+          >
+            {(["hub_member", "delegate", "verified_performer", "mentor", "admin"] as UserRole[]).map((role) => (
+              <option key={role} value={role}>{roleLabels[role]}</option>
+            ))}
+          </select>
+        </section>
+      )}
       <button className="secondary-button w-full" onClick={props.logout}>Log out</button>
     </div>
   );
