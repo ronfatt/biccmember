@@ -626,16 +626,19 @@ function AuthFlow(props: {
 
   if (screen === "splash") {
     return (
-      <main className="app-surface relative flex h-full flex-col overflow-hidden px-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-[calc(2rem+env(safe-area-inset-top))]">
+      <main className="app-surface relative flex h-full flex-col overflow-hidden px-6 pb-[calc(1.65rem+env(safe-area-inset-bottom))] pt-[calc(1.5rem+env(safe-area-inset-top))]">
         <PatternLayer />
-        <div className="pointer-events-none absolute left-1/2 top-[24%] h-72 w-72 -translate-x-1/2 rounded-full bg-gradient-to-br from-[#FFE26A]/45 via-white/70 to-[#7DD3FC]/35 blur-2xl" />
-        <section className="relative z-10 flex flex-1 flex-col items-center justify-center pb-16 text-center">
-          <div className="rounded-full bg-white/60 p-3 shadow-[0_18px_45px_rgba(11,42,91,0.12)]">
+        <div className="pointer-events-none absolute left-1/2 top-[22%] h-80 w-80 -translate-x-1/2 rounded-full bg-gradient-to-br from-[#FFE26A]/45 via-white/75 to-[#7DD3FC]/35 blur-2xl" />
+        <section className="relative z-10 flex flex-1 flex-col items-center justify-center pb-10 text-center">
+          <div className="rounded-full border-[3px] border-white/80 bg-white/70 p-3 shadow-[0_18px_45px_rgba(11,42,91,0.14)]">
             <LogoMark large />
           </div>
-          <p className="mt-8 badge-yellow">BICC 2026</p>
-          <h1 className="mt-4 max-w-[18rem] text-[2.75rem] font-black leading-[0.98] text-[#0B2A5B]">BICC Member Hub</h1>
-          <p className="mt-5 max-w-[18.5rem] text-[1.02rem] font-extrabold leading-6 text-[#0B2A5B]/76">
+          <p className="mt-7 badge-yellow">BICC 2026</p>
+          <h1 className="mt-4 max-w-[18rem] text-[2.85rem] font-black leading-[0.92] text-[#0B2A5B]">
+            BICC
+            <span className="block">Member Hub</span>
+          </h1>
+          <p className="mt-5 rounded-[22px] border-[2px] border-[#0B2A5B] bg-white/78 px-4 py-3 text-[0.96rem] font-extrabold leading-5 text-[#0B2A5B]/76 shadow-[0_3px_0_#0B2A5B]">
             Free to join. BICC delegates unlock full access.
           </p>
         </section>
@@ -644,10 +647,10 @@ function AuthFlow(props: {
             <LogIn className="h-5 w-5" /> Login
           </button>
           <div className="grid grid-cols-2 gap-3">
-            <button className="secondary-button min-h-12 text-xs" onClick={props.createAccount}>
+            <button className="secondary-button min-h-12 border-[2px] shadow-[0_3px_0_#0B2A5B] text-xs" onClick={props.createAccount}>
               <UserPlus className="h-4 w-4" /> Free Account
             </button>
-            <button className="secondary-button min-h-12 text-xs" onClick={() => props.login("admin")}>
+            <button className="secondary-button min-h-12 border-[2px] shadow-[0_3px_0_#0B2A5B] text-xs" onClick={() => props.login("admin")}>
               <ShieldCheck className="h-4 w-4" /> Organizer
             </button>
           </div>
@@ -925,21 +928,25 @@ function PhotoWall({
   }
 
   return (
-    <section className="game-card overflow-hidden p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <SectionHeader label={compact ? "Smile wall" : "Photo Booth"} title="合照签名铺" compact />
-          <p className="mt-2 text-sm font-bold leading-5 text-[#0B2A5B]/65">
-            {compact ? "今日合照预览。" : "拍合照、写一句签名，大家都可以在这里浏览。"}
-          </p>
-        </div>
-        <div className="grid h-12 w-12 shrink-0 place-items-center rounded-[20px] border-[3px] border-[#0B2A5B] bg-[#FFE26A]">
-          <Camera className="h-6 w-6 text-[#0B2A5B]" strokeWidth={3} />
+    <section className="game-card overflow-hidden p-0">
+      <div className="relative overflow-hidden bg-gradient-to-br from-[#0B2A5B] via-[#123B77] to-[#FF5A4F] p-4 text-white">
+        <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-[#FFE26A]/25" />
+        <div className="relative flex items-start justify-between gap-3">
+          <div>
+            <p className="badge-yellow w-fit">{compact ? "Memory preview" : "BICC Memory Wall"}</p>
+            <h2 className="mt-3 text-2xl font-black leading-tight">合照签名铺</h2>
+            <p className="mt-2 text-sm font-bold leading-5 text-white/78">
+              {compact ? "今日合照和签名。" : "拍合照、写一句签名，让大家一起浏览 BICC 的现场回忆。"}
+            </p>
+          </div>
+          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-[20px] border-[3px] border-white bg-[#FFE26A]">
+            <Camera className="h-6 w-6 text-[#0B2A5B]" strokeWidth={3} />
+          </div>
         </div>
       </div>
 
       {!compact && (
-        <div className="mt-4 rounded-[24px] border-[3px] border-[#0B2A5B] bg-[#FFF8E8] p-3">
+        <div className="m-4 rounded-[24px] border-[3px] border-[#0B2A5B] bg-[#FFF8E8] p-3">
           <input
             className="h-12 w-full rounded-[18px] border-[2px] border-[#0B2A5B] bg-white px-4 text-sm font-black text-[#0B2A5B] outline-none"
             placeholder={`${member.name}'s signature`}
@@ -953,7 +960,7 @@ function PhotoWall({
         </div>
       )}
 
-      <div className={`mt-4 ${compact ? "flex gap-3 overflow-x-auto pb-2" : "grid grid-cols-2 gap-3"}`}>
+      <div className={`${compact ? "flex gap-3 overflow-x-auto px-4 py-4" : "grid grid-cols-2 gap-3 px-4 pb-4"}`}>
         {(compact ? posts.slice(0, 3) : posts).map((post) => (
           <PhotoCard key={post.id} post={post} compact={compact} />
         ))}
@@ -980,6 +987,10 @@ function PhotoCard({ post, compact }: { post: PhotoPost; compact?: boolean }) {
       <div className="p-3">
         <h3 className="text-sm font-black leading-tight text-[#0B2A5B]">{post.caption}</h3>
         <p className="mt-1 text-xs font-bold text-[#0B2A5B]/60">{post.author} · {post.country}</p>
+        <div className="mt-3 flex items-center justify-between rounded-[16px] bg-[#FFF8E8] px-2 py-1.5 text-[10px] font-black text-[#0B2A5B]">
+          <span>Memory</span>
+          <span>♡ {compact ? "12" : "24"}</span>
+        </div>
       </div>
     </article>
   );
@@ -1033,28 +1044,34 @@ function PassTab({ member }: { member: Member }) {
 
   return (
     <div className="space-y-4">
-      <section className="relative overflow-hidden rounded-[32px] border-[4px] border-[#0B2A5B] bg-gradient-to-br from-[#7DD3FC] via-white to-[#FFE26A] p-5 shadow-game">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <Avatar member={member} large />
+      <section className="relative overflow-hidden rounded-[34px] border-[4px] border-[#0B2A5B] bg-[#0B2A5B] p-4 text-white shadow-game">
+        <div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-br from-[#FF5A4F] via-[#F6A23A] to-[#FFE26A]" />
+        <div className="absolute -right-14 top-20 h-36 w-36 rounded-full bg-[#7DD3FC]/25" />
+        <div className="relative rounded-[28px] border-[3px] border-white bg-white/95 p-4 text-[#0B2A5B] shadow-[0_5px_0_rgba(255,255,255,0.45)]">
+          <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="badge-mint w-fit">Pass Active</p>
-              <h2 className="mt-2 text-2xl font-black leading-none text-[#0B2A5B]">{member.name}</h2>
-              <p className="mt-1 flex items-center gap-1 text-sm font-black text-[#0B2A5B]/65">
+              <p className="badge-dark w-fit">BICC Delegate 2026</p>
+              <h2 className="mt-3 text-3xl font-black leading-none">{member.name}</h2>
+              <p className="mt-2 flex items-center gap-1 text-sm font-black text-[#0B2A5B]/65">
                 <MapPin className="h-4 w-4" /> {member.country}
               </p>
             </div>
+            <Avatar member={member} large />
           </div>
-          <ShieldCheck className="h-8 w-8 text-[#FF5A4F]" strokeWidth={3} />
+          <div className="mt-4 grid grid-cols-2 gap-2 text-sm font-black">
+            <InfoPill label="Delegate ID" value={member.delegateId || "BICC26-0000"} />
+            <InfoPill label="Status" value="Verified" />
+          </div>
         </div>
-        <div className="mt-5 grid grid-cols-2 gap-3 text-sm font-black text-[#0B2A5B]">
-          <InfoPill label="Member ID" value={member.delegateId || "BICC26-0000"} />
-          <InfoPill label="Pass Type" value="Delegate" />
-          <InfoPill label="Kit Claim" value="Ready" />
-          <InfoPill label="Status" value="Verified" />
+        <div className="relative mt-4 grid place-items-center rounded-[30px] border-[3px] border-white bg-[#FFF8E8] p-5">
+          <p className="mb-3 badge-mint">Scan for check-in</p>
+          {qr ? <Image alt="Delegate QR code" height={220} src={qr} unoptimized width={220} /> : <QrCode className="h-44 w-44 text-[#0B2A5B]" />}
+          <p className="mt-3 text-xs font-black uppercase tracking-[0.12em] text-[#0B2A5B]/55">Increase brightness before scanning</p>
         </div>
-        <div className="mt-5 grid place-items-center rounded-[28px] border-[3px] border-[#0B2A5B] bg-[#FFF8E8] p-4">
-          {qr ? <Image alt="Delegate QR code" height={190} src={qr} unoptimized width={190} /> : <QrCode className="h-32 w-32 text-[#0B2A5B]" />}
+        <div className="relative mt-4 grid grid-cols-3 gap-2">
+          <PassportStamp label="Kit" value="Ready" />
+          <PassportStamp label="Pass" value="Active" />
+          <PassportStamp label="Type" value="Delegate" />
         </div>
       </section>
       <div className="grid grid-cols-2 gap-3">
@@ -1371,25 +1388,32 @@ function AdminDashboard({
     { title: "Post-event", value: "73", label: "certificates queued" },
   ];
   const commandActions = [
-    { icon: QrCode, title: "QR Check-in", body: "Scan delegate passes and welcome kits", tone: "bg-[#7DD3FC]" },
-    { icon: CheckCircle2, title: "Approve Delegates", body: "12 pending upgrades to review", tone: "bg-[#7FE6C3]" },
-    { icon: Eye, title: "Mark Attendance", body: "Workshop attendance by room", tone: "bg-[#FFE26A]" },
-    { icon: Award, title: "Issue Certificates", body: "Batch issue eligible records", tone: "bg-[#F6A23A]" },
-    { icon: Megaphone, title: "Send Announcement", body: "Push urgent updates by audience", tone: "bg-[#FF5A4F]" },
-    { icon: Camera, title: "Photo Moderation", body: "Review public wall uploads", tone: "bg-[#7DD3FC]" },
-    { icon: Users, title: "Member Export", body: "CSV for finance and ops", tone: "bg-[#7FE6C3]" },
-    { icon: Gift, title: "Welcome Kit", body: "Track claimed and unclaimed kits", tone: "bg-[#FFE26A]" },
+    { group: "On-site", actions: [
+      { icon: Gift, title: "Welcome Kit", body: "Claimed and unclaimed", tone: "bg-[#FFE26A]" },
+      { icon: Eye, title: "Mark Attendance", body: "Workshop room check", tone: "bg-[#7DD3FC]" },
+    ] },
+    { group: "People", actions: [
+      { icon: CheckCircle2, title: "Approve Delegates", body: "12 pending upgrades", tone: "bg-[#7FE6C3]" },
+      { icon: Users, title: "Member Export", body: "CSV for ops", tone: "bg-[#7FE6C3]" },
+    ] },
+    { group: "Content", actions: [
+      { icon: Megaphone, title: "Send Announcement", body: "Urgent updates", tone: "bg-[#FF5A4F]" },
+      { icon: Camera, title: "Photo Moderation", body: "Review wall uploads", tone: "bg-[#7DD3FC]" },
+    ] },
+    { group: "Post-event", actions: [
+      { icon: Award, title: "Issue Certificates", body: "Batch eligible records", tone: "bg-[#F6A23A]" },
+    ] },
   ];
 
   return (
     <div className="space-y-4">
       <section className="relative overflow-hidden rounded-[34px] border-[3px] border-[#0B2A5B] bg-gradient-to-br from-[#0B2A5B] to-[#123B77] p-5 text-white shadow-game">
         <div className="absolute -right-10 -top-10 h-28 w-28 rounded-full bg-[#FFE26A]/25" />
-        <p className="badge-yellow w-fit">Organizer OS</p>
-        <h2 className="relative mt-4 text-3xl font-black leading-none">BICC Control Center</h2>
-        <p className="relative mt-3 text-sm font-bold leading-5 text-white/75">Run registration, check-in, classes, certificates, announcements and community memory from one mobile command hub.</p>
-        <button className="relative mt-5 flex min-h-14 w-full items-center justify-center gap-2 rounded-[24px] border-2 border-white bg-[#FFE26A] font-black text-[#0B2A5B] shadow-[0_4px_0_rgba(255,255,255,0.45)]" onClick={() => setScannerOpen(true)}>
-          <QrCode className="h-5 w-5" /> Open Scanner
+        <p className="badge-yellow w-fit">On-site command</p>
+        <h2 className="relative mt-4 text-3xl font-black leading-none">Scan Check-in</h2>
+        <p className="relative mt-3 text-sm font-bold leading-5 text-white/75">Fast entry for delegate passes, welcome kits and workshop attendance.</p>
+        <button className="relative mt-5 flex min-h-[4.25rem] w-full items-center justify-center gap-3 rounded-[26px] border-2 border-white bg-[#FFE26A] text-lg font-black text-[#0B2A5B] shadow-[0_5px_0_rgba(255,255,255,0.45)]" onClick={() => setScannerOpen(true)}>
+          <QrCode className="h-6 w-6" /> Open Scanner
         </button>
       </section>
 
@@ -1417,24 +1441,29 @@ function AdminDashboard({
         </div>
       </section>
 
-      <div className="grid grid-cols-2 gap-3">
-        {commandActions.map((action) => {
-          const Icon = action.icon;
-          return (
-            <button
-              className="rounded-[28px] border-[3px] border-[#0B2A5B] bg-white p-4 text-left shadow-[0_4px_0_#0B2A5B]"
-              key={action.title}
-              onClick={() => (action.title === "QR Check-in" ? setScannerOpen(true) : runOrganizerAction(action.title))}
-            >
-              <div className={`grid h-11 w-11 place-items-center rounded-[18px] border-[2px] border-[#0B2A5B] ${action.tone}`}>
-                <Icon className="h-5 w-5 text-[#0B2A5B]" strokeWidth={3} />
-              </div>
-              <h3 className="mt-3 text-base font-black leading-tight text-[#0B2A5B]">{action.title}</h3>
-              <p className="mt-1 text-xs font-bold leading-4 text-[#0B2A5B]/60">{action.body}</p>
-            </button>
-          );
-        })}
-      </div>
+      {commandActions.map((group) => (
+        <section className="game-card p-4" key={group.group}>
+          <SectionHeader label="Admin" title={group.group} compact />
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            {group.actions.map((action) => {
+              const Icon = action.icon;
+              return (
+                <button
+                  className="rounded-[24px] border-[2px] border-[#0B2A5B] bg-white p-3 text-left shadow-[0_3px_0_#0B2A5B]"
+                  key={action.title}
+                  onClick={() => runOrganizerAction(action.title)}
+                >
+                  <div className={`grid h-10 w-10 place-items-center rounded-[16px] border-[2px] border-[#0B2A5B] ${action.tone}`}>
+                    <Icon className="h-5 w-5 text-[#0B2A5B]" strokeWidth={3} />
+                  </div>
+                  <h3 className="mt-3 text-sm font-black leading-tight text-[#0B2A5B]">{action.title}</h3>
+                  <p className="mt-1 text-[11px] font-bold leading-4 text-[#0B2A5B]/60">{action.body}</p>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      ))}
 
       <section className="game-card p-4">
         <SectionHeader label="Capacity" title="Class Rooms" compact />
@@ -1595,19 +1624,20 @@ function MiniValueList() {
 
 function BottomTabs({ activeTab, setActiveTab }: { activeTab: Tab; setActiveTab: (tab: Tab) => void }) {
   return (
-    <nav className="absolute inset-x-0 bottom-0 z-20 border-t-[3px] border-[#0B2A5B] bg-white px-2 pb-5 pt-2">
-      <div className="grid grid-cols-5 gap-1">
+    <nav className="absolute inset-x-0 bottom-0 z-20 border-t-[3px] border-[#0B2A5B] bg-white/96 px-2 pb-[calc(0.9rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-14px_30px_rgba(11,42,91,0.08)] backdrop-blur">
+      <div className="grid grid-cols-5 gap-1.5">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const active = activeTab === tab.id;
           return (
             <button
               key={tab.id}
-              className={`flex h-[60px] min-w-0 flex-col items-center justify-center gap-1 rounded-[20px] text-[9px] font-black leading-none text-[#0B2A5B] ${
-                active ? "border-[2px] border-[#0B2A5B] bg-[#FFE26A] shadow-[0_3px_0_#0B2A5B]" : "bg-transparent opacity-55"
+              className={`relative flex h-[62px] min-w-0 flex-col items-center justify-center gap-1 rounded-[22px] text-[9px] font-black leading-none transition text-[#0B2A5B] ${
+                active ? "border-[2px] border-[#0B2A5B] bg-gradient-to-br from-[#FF5A4F] to-[#F6A23A] text-white shadow-[0_4px_0_#0B2A5B]" : "bg-[#FFF8E8]/65 opacity-70"
               }`}
               onClick={() => setActiveTab(tab.id)}
             >
+              {active && <span className="absolute -top-1 h-2 w-8 rounded-full border-[2px] border-[#0B2A5B] bg-[#FFE26A]" />}
               <Icon className="h-5 w-5" strokeWidth={3} />
               <span>{tab.label}</span>
             </button>
